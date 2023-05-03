@@ -71,14 +71,8 @@ async def on_message(message: discord.Message):
                     case 'direct':
                         add_to_db = True
                         quote = Quote(perform_parse=True, raw=command.get_command_from(2))
-                    case 'help':
-                        await message.reply(f'Available options:\
-                                            \n`>>quote direct "<quote text>" -<author name>(, <datetime in any format>(, <location or platform> ))`\
-                                            \nExample: `>>quote direct "This is a direct quote to add." -Scouter, 2023`\
-                                            \n`>>quote add --quote=<quote text without quotation> --author=<author name> --location=<location or platform> --time=<datetime in any format>`\
-                                            \nExample: `>>quote add --quote=This is a verbose quote. --author=Scouter --location=Discord--time=2023 >>quote add --quote=This is a less detailed quote. --author=Scouter --time=2023`')
                     case _:
-                        await message.reply(f"Not a valid command. Please consult `>>quote help`")
+                        await message.reply(f"Not a valid command. Please consult `>>help`")
 
                 # add to the database if the action calls for it
                 if add_to_db:
@@ -100,5 +94,7 @@ async def on_message(message: discord.Message):
                 # send message to channel if there is a quote that came about this message
                 if not quote.is_bad():
                     await message.channel.send(f"> {quote}")
+            case "help":
+                await message.reply(f"Go to https://github.com/maxoakes/discord-bot-scoot-a-zoot/blob/main/Commands.md to see available commands.")
                 
 client.run(os.getenv('TOKEN'))
