@@ -1,23 +1,28 @@
 class Command:
-    __base = ""
-    __primary = ""
-    __args = {}
+    __base: list[str] = []
+    __args: dict[str, str] = {}
+
+    __original: str = ""
 
     def __init__(self, input: str):
         # reset
-        self.__base = ""
-        self.__primary = ""
+        self.__original = input.strip()
+        self.__base = []
         self.__args = {}
 
-        # first split between [command and primary] and [list of flags]
-        first_flag_index = input.find('--')
+        # find the split between the command and its flags
+        first_flag_index = self.__original.find('--')
         if first_flag_index == -1:
-            # there are no flags, just parse the entire input command
-            (self.__base, self.__primary) = Command.parse_command_primary(input)
+            self.__base = self.__original.split(' ')
         else:
+            self.__base = self.__original[0:first_flag_index].split(' ')
+        self.__base = list(filter(lambda part: part != '', self.__base))
+        print(self.__base)
+
+        # if there are flags, parse them
+        if first_flag_index > -1:
             # there are flags, so we need to find and split the input command
-            (self.__base, self.__primary) = Command.parse_command_primary(input[0:first_flag_index]) 
-            arg_string = input[first_flag_index:]
+            arg_string = self.__original[first_flag_index:]
 
             # parse flag args
             arg_list = arg_string.split('--')[1:]
@@ -31,17 +36,15 @@ class Command:
                     (key, value) = (arg[0:middle_index].strip(), arg[middle_index+1:].strip())
                     self.__args[key] = value
         
-    def parse_command_primary(input: str):
-        items = input.split(' ', 1)
-        if len(items) == 1:
-            items.append('')
-        return (items[0].strip(), items[1].strip())
+    def get_part(self, num: int):
+        return self.__base[num]
     
-    def get_base_command(self):
-        return self.__base
-    
-    def get_primary_value(self):
-        return self.__primary
+    def get_command_from(self, start: int):
+        # >>quote add "this is a quote"
+        #   0     1   2     3  4 5
+        available_lenth = len(self.__base)
+        s = min(start, available_lenth)
+        return ' '.join(self.__base[s:])
     
     def get_all_args(self):
         return self.__args
@@ -50,4 +53,4 @@ class Command:
         return self.__args.get(key)
     
     def __str__(self):
-        return f"COMMAND:'{self.__base}' PRIMARY:'{self.__primary}' FLAG:{self.__args}"
+        return f"COMMAND:{self.__base} FLAG:{self.__args}"
