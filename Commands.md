@@ -21,3 +21,11 @@ Below are all implemented and available commands for DJ Scoot-A-Zoot.
 
 `>>quote add --quote=This is a less detailed quote. --author=Scouter --time=2023`
 
+# `stream`
+1. Play a stream from internet radio or a video from a URL
+
+`>>stream <URL>`
+
+## Examples
+
+`>>stream https://allclassical.streamguys1.com/ac96k`

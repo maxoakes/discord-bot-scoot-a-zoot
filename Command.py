@@ -1,32 +1,44 @@
+import discord
+
 class Command:
+    # final static
+    COMMAND_CHAR = '>>'
+
+    # private variables
     __base: list[str] = []
     __args: dict[str, str] = {}
 
-    __original: str = ""
+    __text: str = ""
+    __message: discord.Message
+    __author: discord.Member | discord.User = None
+    __channel = None
 
-    def __init__(self, input: str):
+    def __init__(self, message: discord.Message):
+        # extract info
+        self.__author = message.author
+        self.__channel = message.channel
+        self.__message = message
+        self.__text = message.content[len(Command.COMMAND_CHAR):].strip()
+
         # reset
-        self.__original = input.strip()
         self.__base = []
         self.__args = {}
 
         # find the split between the command and its flags
-        first_flag_index = self.__original.find('--')
+        first_flag_index = self.__text.find('--')
         if first_flag_index == -1:
-            self.__base = self.__original.split(' ')
+            self.__base = self.__text.split(' ')
         else:
-            self.__base = self.__original[0:first_flag_index].split(' ')
+            self.__base = self.__text[0:first_flag_index].split(' ')
         self.__base = list(filter(lambda part: part != '', self.__base))
-        print(self.__base)
 
         # if there are flags, parse them
         if first_flag_index > -1:
             # there are flags, so we need to find and split the input command
-            arg_string = self.__original[first_flag_index:]
+            arg_string = self.__text[first_flag_index:]
 
             # parse flag args
             arg_list = arg_string.split('--')[1:]
-            print(arg_list)
             for arg in arg_list:
                 middle_index = arg.find('=')
                 if middle_index == -1:
@@ -51,6 +63,15 @@ class Command:
 
     def get_arg(self, key: str):
         return self.__args.get(key)
+    
+    def get_author(self):
+        return self.__author
+    
+    def get_channel(self):
+        return self.__channel
+    
+    def get_message(self):
+        return self.__message
     
     def __str__(self):
         return f"COMMAND:{self.__base} FLAG:{self.__args}"
