@@ -5,10 +5,10 @@ import asyncio
 from dotenv import load_dotenv
 from Quote import Quote
 from Command import Command
-from Util import Util
+from Util import Util, PlaylistAction
 from InstanceManager import InstanceManager
 from MediaManager import MediaManager
-from Playlist import Playlist
+from LinearPlaylist import LinearPlaylist
 from PlaylistRequest import PlaylistRequest
 
 # env and client setup
@@ -18,7 +18,7 @@ intents = discord.Intents.all()
 client = discord.Client(intents=intents)
 default_channel = None
 media_manager: MediaManager = None
-playlist = Playlist(client)
+playlist = LinearPlaylist(client)
 
 # on startup
 @client.event
@@ -130,8 +130,8 @@ async def command_stream(command: Command):
     
     request = PlaylistRequest(source_string, command.get_author(), command.get_arg('video'))
     playlist.add_queue(request)
-    if not playlist.get_now_playing():
-        playlist.iterate_queue()
+    # if not playlist.get_now_playing():
+    #     playlist.iterate_queue()
     return
 
 async def command_playlist(command: Command):
@@ -142,30 +142,39 @@ async def command_playlist(command: Command):
         case 'add':
             pass # done via >>stream <item>
         case 'skip':
-            playlist.set_manual(True)
-            playlist.iterate_queue()
+            if media_manager.get_voice_channel():
+                playlist.request_movement(PlaylistAction.FORWARD)
+                print(f"Intended target:{playlist.get_next_queue()}")
         case 'next':
-            playlist.set_manual(True)
-            playlist.iterate_queue()
+            if media_manager.get_voice_channel():
+                playlist.request_movement(PlaylistAction.FORWARD)
+                print(f"Intended target:{playlist.get_next_queue()}")
         case 'back':
-            playlist.set_manual(True)
-            playlist.move_back_queue()
+            if media_manager.get_voice_channel():
+                playlist.request_movement(PlaylistAction.BACKWARD)
+            else:
+                playlist.move_back_queue()
+                playlist.get_now_playing().update_requester(command.get_author())
+            print(f"Intended target:{playlist.get_prev_queue()}")
         case 'prev':
-            playlist.set_manual(True)
-            playlist.move_back_queue()
+            if media_manager.get_voice_channel():
+                playlist.request_movement(PlaylistAction.BACKWARD)
+            else:
+                playlist.move_back_queue()
+                playlist.get_now_playing().update_requester(command.get_author())
+            print(f"Intended target:{playlist.get_prev_queue()}")
         case 'clear':
             playlist.clear_queue()
-        case 'stop':
+        case 'end':
             if media_manager.get_voice_client():
                 playlist.clear_queue()
-                media_manager.get_voice_client().stop()
-                await media_manager.get_voice_client().disconnect()
+                await disconnect_from_voice()
         case 'pause':
             if media_manager.get_voice_client():
                 media_manager.get_voice_client().pause()
-                # await media_manager.get_voice_client().disconnect()
         case 'resume':
-            media_manager.get_voice_client().resume()
+            if media_manager.get_voice_client():
+                media_manager.get_voice_client().resume()
         case _:
             await command.get_channel().send(f"Unknown action `{action}`.")
 
@@ -175,16 +184,17 @@ async def command_help(message: discord.Message):
 
 @client.event
 async def on_media_playlist_update():
-    await media_manager.get_text_channel().send(f"Queue updated: Now size {len(playlist.get_full_queue())}, with first being: {playlist.get_next_queue()}")
+    pass
 
 # loop forever
 @client.event
 async def on_playlist_watcher():
     await media_manager.get_text_channel().send("I am now taking song and media requests.")
     while True:
-        if playlist.get_now_playing():
-            await media_manager.get_text_channel().send("Playlist Item found!")
+        if not playlist.is_end():
             request = playlist.get_now_playing()
+            print(f"Starting iteration with {request.get_source_string()}")
+            # await media_manager.get_text_channel().send(f"Initializing next request: `{request.get_source_string()}`")
             
             if not request.get_requester():
                 await media_manager.get_text_channel().send("Requester is not known. Cannot follow!")
@@ -213,41 +223,64 @@ async def on_playlist_watcher():
                     media_manager.set_voice_channel(target_voice_channel)
                     media_manager.set_voice_client(await target_voice_channel.connect())
 
-                
                 def after_media(error):
                     print(f'\tEnded stream for {request.get_requester().guild.name}')
-                    if not playlist.is_manual():
-                        next = playlist.iterate_queue()
-                        if not next:
-                            pass
-                            # disconnect if there is nothing more
-                            # media_manager.get_voice_client().stop()
-                            # await media_manager.get_voice_client().disconnect()
-                        if error:
-                            print(error)
+                    if error:
+                        print(error)
+                    playlist.allow_progress(True)
                 
                 # play the stream
-                (source, metadata) = await media_manager.get_best_stream_from_url(request.get_source_string())
-                await media_manager.get_text_channel().send(f"Now playing {metadata}, requested by {request.get_requester()}")
-                if not source:
+                source_string = request.get_source_string()
+                (source, metadata) = await media_manager.get_best_stream_from_url(source_string)
+                await media_manager.get_text_channel().send(f"Now playing `{metadata}`, requested by `{request.get_requester()}`")
+                if not source or not source_string:
                     await media_manager.get_text_channel().send('Bad source. Exiting.')
                     media_manager.get_voice_client().stop()
                     await media_manager.get_voice_client().disconnect()
                     return
                 media_manager.get_voice_client().play(source, after=after_media)
-                this_play_id = playlist.get_current_play_id()
-                # await asyncio.sleep(3)
-                while this_play_id == playlist.get_current_play_id():
-                    await asyncio.sleep(2)
-                print("\tnext iteration")
-                if media_manager.get_voice_client().is_playing():
-                    media_manager.get_voice_client().stop()
+
+                # locking mechanism, stream will not iterate until func after_media is run
+                while True:
+                    await asyncio.sleep(0.5)
+                    # if the media track has ended
+                    if playlist.can_progress():
+                        break
+                    if playlist.get_requested_action() != PlaylistAction.STAY:
+                        # force a stop to current track if there is a request to change tracks
+                        print(f'\tRequest to move {playlist.get_requested_action()}')
+                        media_manager.get_voice_client().stop()
+                
+                # if we get here, the playlist can progress
+                print(f"\tNEXT: can_progress:{playlist.can_progress()}, movement:{playlist.get_requested_action()}")
+                match playlist.get_requested_action():
+                    case PlaylistAction.FORWARD:
+                        playlist.iterate_queue()
+                    case PlaylistAction.BACKWARD:
+                        playlist.move_back_queue()
+                    case PlaylistAction.STAY:
+                        playlist.iterate_queue()
+                    case _:
+                        print(f"unknown action {playlist.get_requested_action()}")
+
+                # reset movement for next iteration
+                playlist.request_movement(PlaylistAction.STAY)
+                playlist.allow_progress(False)
+                # if media_manager.get_voice_client().is_playing():
+                #     media_manager.get_voice_client().stop()
+                print("\tend of this loop")
             else:
                 await media_manager.get_text_channel().send(f'{request.get_requester().name} is not in a voice channel. Going to next playlist item')
                 playlist.iterate_queue()
         else:
-            # await default_channel.send("nothing to do")
-            pass
-        await asyncio.sleep(2)
+            if media_manager.get_voice_channel():
+                await disconnect_from_voice()
+        await asyncio.sleep(1)
 
+async def disconnect_from_voice():
+    if media_manager.get_voice_client():
+        if media_manager.get_voice_client().is_playing():
+            media_manager.get_voice_client().stop()
+        await media_manager.get_voice_client().disconnect()
+    media_manager.set_voice_channel(None)
 client.run(os.getenv('TOKEN'))

@@ -1,9 +1,8 @@
-import queue
 from discord import FFmpegOpusAudio, FFmpegPCMAudio, channel
 
 class MediaManager:
     FFMPEG_OPTS = {'before_options': '-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5', 'options': '-vn -filter:a "volume=0.25"', 'executable':r"A:/Programs/ffmpeg/bin/ffmpeg.exe"}
-    YTDL_OPTIONS = {'format': 'bestaudio/best', 'noplaylist':'True'}
+    YTDL_OPTIONS = {'format': 'bestaudio/best', 'noplaylist':'True', 'quiet':'True'}
 
     __voice_client = None
     __current_voice_channel = None
@@ -35,7 +34,7 @@ class MediaManager:
             import youtube_dl
             youtube = youtube_dl.YoutubeDL(MediaManager.YTDL_OPTIONS)
             info = youtube.extract_info(source_string, download=False)
-            print(info['formats'][0]['url'])
+            # print(info['formats'][0]['url'])
             stream = FFmpegPCMAudio(info['formats'][0]['url'], **MediaManager.FFMPEG_OPTS)
             metadata = info.get('title', "_unknown")
         else:

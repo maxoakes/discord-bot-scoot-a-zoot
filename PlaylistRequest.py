@@ -25,6 +25,10 @@ class PlaylistRequest:
     def get_requester(self):
         return self.__author
     
+    def update_requester(self, new_author: discord.Member | discord.User):
+        self.__author = new_author
+        self.__time = datetime.datetime.now()
+    
     def is_video(self):
         return self.__is_video
     
@@ -32,4 +36,4 @@ class PlaylistRequest:
         return self.__time
     
     def __str__(self) -> str:
-        return f"`{self.__link} requested by {self.__author.name}, {self.__time.strftime('%A, %b %d, %I:%M:%S %p %Z')} (is_video:{self.__is_video})`"
+        return f"`{self.__link} requested by {self.__author.name}, {self.__time.strftime('%A, %b %d, %I:%M:%S %p.%f %Z')} (is_video:{self.__is_video})`"

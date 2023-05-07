@@ -22,5 +22,7 @@ Required dependencies to install with pip:
 >>quote direct "This is a direct quote to add"
 >>quote   add --quote=I am testing a quote. --author=Scouter --location=Discord--time=2023'
 >>stream https://allclassical.streamguys1.com/ac128kmp3
+>>stream https://www.youtube.com/watch?v=ENSW8Q0u2jw
+>>stream https://www.youtube.com/watch?v=3cDxN8ZJe10
 >>stream https://www.youtube.com/watch?v=TCm9788Tb5g
 ```
