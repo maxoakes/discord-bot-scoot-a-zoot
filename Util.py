@@ -6,6 +6,7 @@ class Util:
     AFFIRMATIVE_RESPONSE = ['y', 'ya', 'ye', 'yea', 'yes', 'yeah']
     NEGATIVE_RESPONSE = ['n', 'no', 'nah', 'neah']
     END_RESPONSE = ['s', 'stop', 'e', 'end', 'exit', 'h', 'halt']
+    FFMPEG_PATH = r"A:/Programs/ffmpeg/bin/ffmpeg.exe"
 
 class PlaylistAction(Enum):
     STAY = 0

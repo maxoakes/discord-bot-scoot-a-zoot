@@ -1,7 +1,9 @@
 # DJ Scoot-A-Zoot
-A general-purpose bot that does many things from adding items to databases, playing music, or talking/chatting with people
+A general-purpose bot that does many things from adding items to databases, playing music, or talking/chatting with people.
 
-```https://discord.com/oauth2/authorize?client_id=1102715365299064933&permissions=328635906624&scope=bot```
+A universal bot will not be released. When the main script is run, it is intended to manage only one server.
+
+If you want to run this bot on multiple servers, you will need to make multiple applications/bots via https://discord.com/developers/applications, and run one script per bot, each with their own token.
 
 Required dependencies to install with pip:
 * `discord.py`
@@ -23,6 +25,5 @@ Required dependencies to install with pip:
 >>quote   add --quote=I am testing a quote. --author=Scouter --location=Discord--time=2023'
 >>stream https://allclassical.streamguys1.com/ac128kmp3
 >>stream https://www.youtube.com/watch?v=ENSW8Q0u2jw
->>stream https://www.youtube.com/watch?v=3cDxN8ZJe10
 >>stream https://www.youtube.com/watch?v=TCm9788Tb5g
 ```

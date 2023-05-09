@@ -1,18 +1,16 @@
 from discord import FFmpegOpusAudio, FFmpegPCMAudio, channel
 
+from Util import Util
+
 class MediaManager:
-    FFMPEG_OPTS = {'before_options': '-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5', 'options': '-vn -filter:a "volume=0.25"', 'executable':r"A:/Programs/ffmpeg/bin/ffmpeg.exe"}
+    FFMPEG_OPTS = {'before_options': '-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5', 'options': '-vn -filter:a "volume=0.25"', 'executable': Util.FFMPEG_PATH}
     YTDL_OPTIONS = {'format': 'bestaudio/best', 'noplaylist':'True', 'quiet':'True'}
 
     __voice_client = None
     __current_voice_channel = None
-    __default_text_channel = None
 
-    def __init__(self, default_text_channel):
-        self.__default_text_channel = default_text_channel
-
-    def get_text_channel(self):
-        return self.__default_text_channel
+    def __init__(self):
+        pass
 
     def set_voice_client(self, voice_client):
         self.__voice_client = voice_client
