@@ -54,8 +54,8 @@ class Command:
     def get_command_from(self, start: int):
         # >>quote add "this is a quote"
         #   0     1   2     3  4 5
-        available_lenth = len(self.__base)
-        s = min(start, available_lenth)
+        available_length = len(self.__base)
+        s = min(start, available_length)
         return ' '.join(self.__base[s:])
     
     def get_all_args(self):

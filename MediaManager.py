@@ -1,5 +1,4 @@
 from discord import FFmpegOpusAudio, FFmpegPCMAudio, channel
-
 from Util import Util
 
 class MediaManager:
