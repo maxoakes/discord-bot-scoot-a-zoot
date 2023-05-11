@@ -118,6 +118,19 @@ async def perform_route(command: Command):
         current_bot_voice_client = media_manager.get_voice_client()
 
         match command.get_part(0):
+            # lookup AND add to queue from a service
+            case 'search' | 'lookup' | 'query':
+                match command.get_part(1).lower():
+                    case 'youtube' | 'yt':
+                        import youtube_search
+                        print(command.get_command_from(2))
+                        results = youtube_search.YoutubeSearch(command.get_command_from(2), max_results=1).to_dict()
+                        url = f"https://www.youtube.com{results[0]['url_suffix']}"
+                        request = PlaylistRequest(url, command.get_author(), command.get_arg('video') != None)
+                        playlist.add_queue(request)
+                    case _:
+                        await command.get_channel().send("Unknown service. Consult `>>help search`")
+
             # add something to the playlist
             case 'add' | 'stream' | 'listen' | 'watch' | 'queue':
                 request = await parse_playlist_request(command)
