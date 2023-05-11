@@ -26,7 +26,8 @@ class MediaManager:
     async def get_best_stream_from_url(self, source_string: str):
         stream = None
         metadata = ""
-        if source_string.find("https://youtu.be/") > -1 or source_string.find("https://www.youtube.com/watch?") > -1:
+        if source_string.find(Util.YOUTUBE_URL_PREFIX_FULL) > -1 or source_string.find(Util.YOUTUBE_URL_PREFIX_SHORT) > -1:
+            # play a youtube video
             print("\tFound a youtube source")
             import youtube_dl
             youtube = youtube_dl.YoutubeDL(MediaManager.YTDL_OPTIONS)
@@ -34,7 +35,14 @@ class MediaManager:
             # print(info['formats'][0]['url'])
             stream = FFmpegPCMAudio(info['formats'][0]['url'], **MediaManager.FFMPEG_OPTS)
             metadata = info.get('title', "_unknown")
+        elif source_string.find(Util.FILE_PROTOCOL_PREFIX) > -1:
+            prefix_len = len(Util.FILE_PROTOCOL_PREFIX)
+            # play a local file
+            print("\tFound a local file source")
+            stream = FFmpegPCMAudio(executable=Util.FFMPEG_PATH, source=source_string[prefix_len:])
+            metadata = source_string[prefix_len:]
         else:
+            # play a file from an unknown origin
             print("\tFound a different source")
             stream = await FFmpegOpusAudio.from_probe(source_string, **MediaManager.FFMPEG_OPTS, method='fallback')
             metadata = source_string

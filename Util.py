@@ -7,6 +7,9 @@ class Util:
     NEGATIVE_RESPONSE = ['n', 'no', 'nah', 'neah', 'f', 'false']
     END_RESPONSE = ['s', 'stop', 'e', 'end', 'exit', 'h', 'halt']
     FFMPEG_PATH = r"A:/Programs/ffmpeg/bin/ffmpeg.exe"
+    FILE_PROTOCOL_PREFIX = "file://"
+    YOUTUBE_URL_PREFIX_FULL = "https://www.youtube.com/watch?"
+    YOUTUBE_URL_PREFIX_SHORT = "https://youtu.be/"
 
 class PlaylistAction(Enum):
     STAY = 0
