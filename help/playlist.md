@@ -1,0 +1,1 @@
+Shows the entire playlist. First shows previously played items, then 'now playing', then the queue.

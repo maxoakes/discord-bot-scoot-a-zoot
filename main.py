@@ -4,6 +4,7 @@ import discord
 from discord import BotIntegration, FFmpegOpusAudio, FFmpegPCMAudio
 import asyncio
 from dotenv import load_dotenv
+from Help import Help
 from Quote import Quote
 from Command import Command
 from Util import Util, PlaylistAction
@@ -103,7 +104,7 @@ async def perform_route(command: Command):
 
             # print the list of commands
             case "help":
-                await print_help_message(command)
+                await command.get_channel().send(Help.get_help_markdown(command.get_command_from(1)))
 
             # unknown command
             case _:
@@ -179,7 +180,7 @@ async def perform_route(command: Command):
 
             # print the list of commands
             case "help":
-                await print_help_message(command)
+                await command.get_channel().send(Help.get_help_markdown(command.get_command_from(1)))
 
             # there is an unknown command that a user entered in the media text channel
             case _:
@@ -271,10 +272,6 @@ async def parse_playlist_request(command: Command):
         return None
     else:
         return PlaylistRequest(source_string, command.get_author(), vid)
-
-# standard help command
-async def print_help_message(command: Command):
-    await command.get_message().reply(f"Go to `https://github.com/maxoakes/discord-bot-scoot-a-zoot/blob/main/Commands.md`. This is a placeholder response.")
 
 # loop forever
 @client.event
