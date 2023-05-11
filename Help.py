@@ -2,12 +2,12 @@ from pathlib import Path
 from Util import Util
 
 class Help:
-    commands = ['quote', 'stream', 'next', 'back', 'playlist', 'clear', 'end', 'pause', 'resume', 'preset']
+    commands = ['quote', 'stream', 'next', 'prev', 'playlist', 'clear', 'end', 'pause', 'resume', 'preset']
     
     def get_help_markdown(command_name: str):
         single_command = command_name.replace('\\', '').replace('/','') # need to avoid malicious behavior
         match single_command:
-            case 'quote' | 'stream' | 'next' | 'back' | 'playlist' | 'clear' | 'end' | 'pause' | 'resume':
+            case 'quote' | 'stream' | 'next' | 'prev' | 'playlist' | 'clear' | 'end' | 'pause' | 'resume':
                 out = Path(f'help/{single_command}.md').read_text()
             case 'preset' | 'presets':
                 import csv
