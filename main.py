@@ -132,7 +132,7 @@ async def perform_route(command: Command):
                         await command.get_channel().send("Unknown service. Consult `>>help search`")
 
             # add something to the playlist
-            case 'add' | 'stream' | 'listen' | 'watch' | 'queue':
+            case 'add' | 'stream' | 'listen' | 'queue':
                 request = await parse_playlist_request(command)
                 if request:
                     playlist.add_queue(request)

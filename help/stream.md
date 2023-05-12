@@ -8,4 +8,4 @@ Examples:
 `>>stream --preset=classical`
 `>>stream https://www.youtube.com/watch?v=TCm9788Tb5g`
 Aliases:
-`add`,`listen`,`watch`,`queue`
+`add`,`listen`,`queue`
