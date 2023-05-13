@@ -64,6 +64,9 @@ class Command:
     def get_arg(self, key: str):
         return self.__args.get(key)
     
+    def does_arg_exist(self, key: str) -> bool:
+        return key in list(self.__args.keys())
+
     def get_author(self):
         return self.__author
     

@@ -1,7 +1,12 @@
 import discord
-from Command import Command
+from enum import Enum
 from PlaylistRequest import PlaylistRequest
-from Util import PlaylistAction
+
+class PlaylistAction(Enum):
+    STAY = 0
+    FORWARD = 1
+    BACKWARD = 2
+    STOP = 3
 
 class LinearPlaylist:
     __client_ref: discord.Client
@@ -55,6 +60,9 @@ class LinearPlaylist:
             return []
         else:
             return self.__playlist[:self.__current_index]
+        
+    def get_full_playlist(self):
+        return (self.__playlist, self.__current_index)
             
     def iterate_queue(self) -> PlaylistRequest:
         if not self.is_init() or self.is_end():
@@ -82,13 +90,11 @@ class LinearPlaylist:
         if not self.is_init():
             return
         else:
-            temp = []
             if clear_prev:
-                temp.append(self.__playlist[self.__current_index])
+                self.__playlist = [self.__playlist[self.__current_index]]
+                self.__current_index = 0
             else:
-                temp = self.__playlist[self.__current_index:]
-            self.__playlist = temp
-            self.__current_index = 0
+                self.__playlist = self.__playlist[0:self.__current_index]
             self.__client_ref.dispatch("media_playlist_update")
             return
     

@@ -1,6 +1,6 @@
-preset,url,vid
-classical,https://allclassical.streamguys1.com/ac128kmp3,False,KQOC: Portland AllClassical
-jpop,http://radio.kahoku.net:8000,False,Kahoku Radio
-opb,https://stream5.opb.org/2440_64.aac,False,KOPB Portland: Oregon Public Broadcasting 
-kboo,https://live.kboo.fm:8443/high,False,KBOO Community Radio
-kink,https://live.wostreaming.net/direct/alphacorporate-kinkfmaac-ibc4?source=tunein&source=TuneIn,False,KINK: Portland Classic Rock
+preset,url,desc
+classical,https://allclassical.streamguys1.com/ac128kmp3,KQOC: Portland AllClassical
+jpop,http://radio.kahoku.net:8000,Kahoku Radio
+opb,https://stream5.opb.org/2440_64.aac,KOPB Portland: Oregon Public Broadcasting 
+kboo,https://live.kboo.fm:8443/high,KBOO Community Radio
+kink,https://live.wostreaming.net/direct/alphacorporate-kinkfmaac-ibc4?source=tunein&source=TuneIn,KINK: Portland Classic Rock

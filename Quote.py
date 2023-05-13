@@ -3,8 +3,10 @@ class Quote:
     __author: str = "Anonymous"
     __location: str = None
     __time: str = None
+    __creator: str
 
-    def __init__(self, perform_parse=False, raw='', quote=None, author=None, location=None, time=None):
+    def __init__(self, creator, perform_parse=False, raw='', quote=None, author=None, location=None, time=None):
+        self.__creator = creator
         if perform_parse:
             quote_type = '"'
             first_index = -1
@@ -43,6 +45,7 @@ class Quote:
     
     def is_bad(self):
         return self.__quote == None
+    
     def get_quote_short(self):
         return f'"{self.__quote}" -*{self.__author}*'
     
@@ -59,6 +62,16 @@ class Quote:
     # includes markdown
     def get_quote_verbose(self):
         return f"Quote Text w/o quotation: `{self.__quote}`\nAuthor: `{self.__author}`\nLocation: `{self.__location}`\nTime:`{self.__time}`"
+    
+    def get_embed(self):
+        import discord
+        embed = discord.Embed(title="Quote", color=discord.Color.blue())
+        embed.add_field(name="Text", value=self.__quote, inline=False)
+        embed.add_field(name="Author", value=self.__author, inline=False)
+        embed.add_field(name="Location", value=self.__location, inline=True)
+        embed.add_field(name="Time", value=self.__time, inline=False)
+        embed.set_footer(text=f"Added by {self.__creator}")
+        return embed
     
     def __str__(self):
         return self.get_quote_formal()

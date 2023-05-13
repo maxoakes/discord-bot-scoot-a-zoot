@@ -1,5 +1,4 @@
 from pathlib import Path
-from Util import Util
 
 class Help:
     commands = ['quote', 'search', 'stream', 'next', 'prev', 'playlist', 'clear', 'end', 'pause', 'resume', 'preset']

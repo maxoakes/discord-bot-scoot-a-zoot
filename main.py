@@ -4,12 +4,13 @@ import discord
 from discord import BotIntegration, FFmpegOpusAudio, FFmpegPCMAudio
 import asyncio
 from dotenv import load_dotenv
+from Call import Call
 from Help import Help
 from Quote import Quote
 from Command import Command
-from Util import Util, PlaylistAction
+from Util import Util
 from MediaManager import MediaManager
-from LinearPlaylist import LinearPlaylist
+from LinearPlaylist import LinearPlaylist, PlaylistAction
 from PlaylistRequest import PlaylistRequest
 
 # set up variable storage
@@ -106,6 +107,9 @@ async def perform_route(command: Command):
             case "help":
                 await command.get_channel().send(Help.get_help_markdown(command.get_command_from(1)))
 
+            case 'minecraft':
+                response = Call.minecraft_server(command.get_command_from(1))
+                await command.get_channel().send(response)
             # unknown command
             case _:
                 await command.get_message().reply(f"Not a valid command. Please consult `>>help`")
@@ -123,23 +127,24 @@ async def perform_route(command: Command):
                 match command.get_part(1).lower():
                     case 'youtube' | 'yt':
                         import youtube_search
-                        print(command.get_command_from(2))
                         results = youtube_search.YoutubeSearch(command.get_command_from(2), max_results=1).to_dict()
                         url = f"https://www.youtube.com{results[0]['url_suffix']}"
-                        request = PlaylistRequest(url, command.get_author(), command.get_arg('video') != None)
-                        playlist.add_queue(request)
+                        playlist.add_queue(PlaylistRequest(url, command.get_author()))
                     case _:
                         await command.get_channel().send("Unknown service. Consult `>>help search`")
 
             # add something to the playlist
             case 'add' | 'stream' | 'listen' | 'queue':
-                request = await parse_playlist_request(command)
-                if request:
-                    playlist.add_queue(request)
+                source = await parse_playlist_request(command)
+                if source.find('http') == -1 and source.find('file') == -1:
+                    await command.get_channel().send("Bad source URI. Must be an `http://`, `https://` or `file://` protocol")
+                    return
+                if source:
+                    playlist.add_queue(PlaylistRequest(source, command.get_author()))
 
             # show the current playlist
             case 'playlist' | 'pl' | 'show':
-                await default_media_text_channel.send(playlist)
+                await default_media_text_channel.send(embed=Util.create_playlist_embed(playlist, full=command.does_arg_exist('full')))
 
             # skip the current media and go to the next queue item
             case 'next' | 'skip' | 'pass':
@@ -162,7 +167,7 @@ async def perform_route(command: Command):
 
             # clear the playlist queue
             case 'clear':
-                clear_all = command.get_arg('all') != None
+                clear_all = command.does_arg_exist('all')
                 playlist.clear_queue(clear_all)
                 if clear_all:
                     await command.get_channel().send(f"Queue and history have been cleared.")
@@ -212,15 +217,16 @@ async def parse_quote_request(command: Command):
         # create a quote carefully using flags
         case 'add':
             add_to_db = True
-            quote = Quote(quote=command.get_arg('quote').replace('"', '').replace("'", ''), 
-                        author=command.get_arg('author'), 
-                        location=command.get_arg('location'), 
-                        time=command.get_arg('time'))
+            quote = Quote(command.get_author().name,
+                quote=command.get_arg('quote').replace('"', '').replace("'", ''), 
+                author=command.get_arg('author'), 
+                location=command.get_arg('location'), 
+                time=command.get_arg('time'))
             
         # create a quote like one would do if they were writing text
         case 'direct':
             add_to_db = True
-            quote = Quote(perform_parse=True, raw=command.get_command_from(2))
+            quote = Quote(command.get_author().name, perform_parse=True, raw=command.get_command_from(2))
 
         # get a quote from a database
         case 'get':
@@ -238,7 +244,7 @@ async def parse_quote_request(command: Command):
             return
         
         # confirm the quote to add, and wait for reply
-        await command.get_message().reply(f"**I will add this quote. Is this correct?** (y/n)\n{quote.get_quote_verbose()}")
+        await command.get_message().channel.send(f"**@{command.get_author().name}, I will add this quote. Is this correct?** (y/n)", embed=quote.get_embed())
         try:
             response = await client.wait_for('message', check=check_channel_response, timeout=20.0)
             # check if there is an affirmative response from the same person
@@ -259,9 +265,6 @@ async def parse_playlist_request(command: Command):
     # acquire the target source from the input string
     source_string = command.get_command_from(1).strip()
 
-    # check if the request is for a video with flag '--video'
-    vid = command.get_arg('video') != None
-
     # check if there is a preset quest
     preset = command.get_arg('preset')
     if preset:
@@ -274,7 +277,6 @@ async def parse_playlist_request(command: Command):
                     # print(row) # [preset, url, is_vid]
                     if row[0].lower() == preset.lower():
                         source_string = row[1]
-                        vid = row[2].lower() in Util.AFFIRMATIVE_RESPONSE
         except Exception as e:
             await command.get_message().reply(f"An error occurred reading your request. Nothing will be added to the queue.")
             print(e)
@@ -284,7 +286,7 @@ async def parse_playlist_request(command: Command):
         await command.get_message().reply(f"Bad source given. Nothing will be added to the queue.")
         return None
     else:
-        return PlaylistRequest(source_string, command.get_author(), vid)
+        return source_string
 
 # loop forever
 @client.event
@@ -337,16 +339,19 @@ async def on_playlist_watcher():
                 
                 # play the stream
                 source_string = request.get_source_string()
-                (source, metadata) = await media_manager.get_best_stream_from_url(source_string)
-                await default_media_text_channel.send(f"Now playing `{metadata}`, requested by `{request.get_requester()}`")
-                if not source or not source_string:
+                stream = await media_manager.get_stream_from_url(source_string)
+                await default_media_text_channel.send(
+                    f"**Now playing:**", 
+                    embed=Util.create_playlist_item_embed(request, playlist))
+                
+                if not stream or not source_string:
                     # if something bad really happens, skip this track
                     await default_media_text_channel.send('Bad source. Exiting.')
                     media_manager.get_voice_client().stop()
                     await media_manager.get_voice_client().disconnect()
                     playlist.allow_progress(True)
                 else:
-                    media_manager.get_voice_client().play(source, after=after_media)
+                    media_manager.get_voice_client().play(stream, after=after_media)
 
                 # locking mechanism, stream will not iterate until func after_media is run
                 while True:
