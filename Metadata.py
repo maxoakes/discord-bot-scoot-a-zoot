@@ -30,7 +30,7 @@ class Metadata:
             self.author = info.get('uploader') # or 'uploader'?
             self.runtime = Metadata.seconds_to_string(info.get('duration'))
             self.views = info.get('view_count')
-            timestamp = datetime.date.fromtimestamp(info.get('timestamp'))
+            timestamp = datetime.date.fromisoformat(info.get('upload_date'))
             self.created_at = timestamp.strftime('%A, %b %d, %Y')
             self.image_url = info.get('thumbnail')
             self.title = info.get('track') if info.get('track') else self.title

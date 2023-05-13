@@ -59,13 +59,9 @@ class Quote:
             after_quote = f", {self.__time} in {self.__location}"
         return f'"{self.__quote}" -*{self.__author}{after_quote}*'
     
-    # includes markdown
-    def get_quote_verbose(self):
-        return f"Quote Text w/o quotation: `{self.__quote}`\nAuthor: `{self.__author}`\nLocation: `{self.__location}`\nTime:`{self.__time}`"
-    
     def get_embed(self):
         import discord
-        embed = discord.Embed(title="Quote", color=discord.Color.blue())
+        embed = discord.Embed(title="Quote (without quotation marks)", color=discord.Color.blue())
         embed.add_field(name="Text", value=self.__quote, inline=False)
         embed.add_field(name="Author", value=self.__author, inline=False)
         embed.add_field(name="Location", value=self.__location, inline=True)

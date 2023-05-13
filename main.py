@@ -1,14 +1,13 @@
 import os
 import sys
 import discord
-from discord import BotIntegration, FFmpegOpusAudio, FFmpegPCMAudio
 import asyncio
 from dotenv import load_dotenv
 from Call import Call
 from Help import Help
 from Quote import Quote
 from Command import Command
-from Util import Util
+from Util import MessageType, Util
 from MediaManager import MediaManager
 from LinearPlaylist import LinearPlaylist, PlaylistAction
 from PlaylistRequest import PlaylistRequest
@@ -78,7 +77,7 @@ async def on_ready():
         print('WARNING, no default media request channel is accessible. This bot will not have full functionality.')
 
     # send opening message
-    await default_command_channel.send("I have arrived.")
+    await default_command_channel.send("**I have arrived.**")
     print(f"Initialized for '{this_guild.name}' with command channel='{default_command_channel}' and media channel='{default_media_text_channel}'")
     client.dispatch('playlist_watcher')
 
@@ -92,7 +91,7 @@ async def on_message(message: discord.Message):
     # if the message is a command, try to route and parse it
     if message.content.startswith(Command.COMMAND_CHAR):
         command = Command(message)
-        # await message.channel.send(command) # verbose
+        # await message.channel.send(`command`) # verbose
         await perform_route(command)
 
 async def perform_route(command: Command):
@@ -112,7 +111,7 @@ async def perform_route(command: Command):
                 await command.get_channel().send(response)
             # unknown command
             case _:
-                await command.get_message().reply(f"Not a valid command. Please consult `>>help`")
+                await command.get_message().channel.send(f"{command.get_author().mention}, `{command.get_part(0)}` is not a valid command. Please consult `>>help`")
 
     # media/playlist commands
     elif command.get_message().channel == default_media_text_channel:
@@ -129,22 +128,26 @@ async def perform_route(command: Command):
                         import youtube_search
                         results = youtube_search.YoutubeSearch(command.get_command_from(2), max_results=1).to_dict()
                         url = f"https://www.youtube.com{results[0]['url_suffix']}"
-                        playlist.add_queue(PlaylistRequest(url, command.get_author()))
+                        request = PlaylistRequest(url, command.get_author())
+                        playlist.add_queue(request )
+                        await default_media_text_channel.send("**Added to playlist queue**", embed=Util.create_playlist_item_embed(request, playlist, MessageType.POSITIVE))
                     case _:
-                        await command.get_channel().send("Unknown service. Consult `>>help search`")
+                        await default_media_text_channel.send(embed=Util.create_simple_embed(f"Unknown service. Consult `>>help search`", MessageType.NEGATIVE))
 
             # add something to the playlist
             case 'add' | 'stream' | 'listen' | 'queue':
                 source = await parse_playlist_request(command)
                 if source.find('http') == -1 and source.find('file') == -1:
-                    await command.get_channel().send("Bad source URI. Must be an `http://`, `https://` or `file://` protocol")
+                    await default_media_text_channel.send(embed=Util.create_simple_embed(f"Bad source URI. Must be an `http://`, `https://` or `file://` protocol", MessageType.NEGATIVE))
                     return
                 if source:
-                    playlist.add_queue(PlaylistRequest(source, command.get_author()))
+                    request = PlaylistRequest(source, command.get_author())
+                    playlist.add_queue(request)
+                    await default_media_text_channel.send("**Added to playlist queue**", embed=Util.create_playlist_item_embed(request, playlist, MessageType.POSITIVE))
 
             # show the current playlist
             case 'playlist' | 'pl' | 'show':
-                await default_media_text_channel.send(embed=Util.create_playlist_embed(playlist, full=command.does_arg_exist('full')))
+                await default_media_text_channel.send(embed=Util.create_playlist_embed(playlist, command.does_arg_exist('full'), MessageType.INFO))
 
             # skip the current media and go to the next queue item
             case 'next' | 'skip' | 'pass':
@@ -152,7 +155,7 @@ async def perform_route(command: Command):
                     if is_bot_in_same_voice_channel_as_author:
                         if current_bot_voice_channel:
                             playlist.request_movement(PlaylistAction.FORWARD)
-                            print(f"Intended target:{playlist.get_next_queue()}")
+                            print(f"Intended target: {playlist.get_next_queue()[0].get_source_string()}")
 
             # stop the current media and go to previous item on the queue history
             case 'prev' | 'back' | 'reverse':
@@ -163,16 +166,16 @@ async def perform_route(command: Command):
                         else:
                             playlist.move_back_queue()
                             playlist.get_now_playing().update_requester(command.get_author())
-                        print(f"Intended target:{playlist.get_prev_queue()}")
+                        print(f"Intended target: {playlist.get_prev_queue()[-1].get_source_string()}")
 
             # clear the playlist queue
             case 'clear':
                 clear_all = command.does_arg_exist('all')
                 playlist.clear_queue(clear_all)
                 if clear_all:
-                    await command.get_channel().send(f"Queue and history have been cleared.")
+                    await default_media_text_channel.send(embed=Util.create_simple_embed("Queue and history have been cleared.", MessageType.INFO))
                 else:
-                    await command.get_channel().send(f"Queue has been cleared.")    
+                    await default_media_text_channel.send(embed=Util.create_simple_embed("Queue has been cleared.", MessageType.INFO))
                 
             # clear the queue, stop playing, and return the voice bot
             case 'end':
@@ -202,7 +205,7 @@ async def perform_route(command: Command):
 
             # there is an unknown command that a user entered in the media text channel
             case _:
-                await command.get_channel().send(f"Unknown action `{command.get_part(0)}`.")
+                await command.get_channel().send(embed=Util.create_simple_embed(f"Unknown action `{command.get_part(0)}`.", MessageType.NEGATIVE))
 
 # manage commands for adding or displaying quotes
 async def parse_quote_request(command: Command):
@@ -235,26 +238,26 @@ async def parse_quote_request(command: Command):
 
         # unknown command
         case _:
-            await command.get_message().reply(f"Not a valid command. Please consult `>>help`")
+            await command.get_message().channel.send(f"{command.get_author().mention}, this is not a valid command. Please consult `>>help quote`")
 
     # add to the database if the action calls for it
     if add_to_db:
         if quote.is_bad():
-            await command.get_message().reply(f"Submitted quote was malformed. Please consult `>>help`")
+            await command.get_message().channel.send(f"{command.get_author().mention}, your submitted quote was malformed. Please consult `>>help quote`")
             return
         
         # confirm the quote to add, and wait for reply
-        await command.get_message().channel.send(f"**@{command.get_author().name}, I will add this quote. Is this correct?** (y/n)", embed=quote.get_embed())
+        await command.get_message().channel.send(f"**{command.get_author().mention}, I will add this quote. Is this correct?** (y/n)", embed=quote.get_embed())
         try:
             response = await client.wait_for('message', check=check_channel_response, timeout=20.0)
             # check if there is an affirmative response from the same person
             if response.content.lower().strip() in Util.AFFIRMATIVE_RESPONSE and command.get_author().id == response.author.id:
                 # TODO implement insert query to local DB
-                await command.get_message().reply(f"Added it!")
+                await command.get_message().channel.send(f"{command.get_author().mention}, it has been added to the database.")
             else:
-                await command.get_message().reply(f"I do not see an approval. Canceling.")
+                await command.get_message().channel.send(f"{command.get_author().mention}, no affirmative response was given. Canceling...")
         except TimeoutError:
-            await command.get_message().reply(f"No response provided. Not adding to database.")
+            await command.get_message().channel.send(f"{command.get_author().mention}, no response was given. Canceling...")
             return
         
     # send message to channel if there is a quote that came about this message
@@ -278,12 +281,12 @@ async def parse_playlist_request(command: Command):
                     if row[0].lower() == preset.lower():
                         source_string = row[1]
         except Exception as e:
-            await command.get_message().reply(f"An error occurred reading your request. Nothing will be added to the queue.")
+            await command.get_message().channel.send(f"How did this happen, <{os.getenv('AUTHOR_MENTION')}>?", embed=Util.create_simple_embed("An error occurred getting a the media presets, nothing will be added to the queue.", MessageType.FATAL))
             print(e)
 
     # if there was no source url or valid preset, it is a bad request
     if source_string == "":
-        await command.get_message().reply(f"Bad source given. Nothing will be added to the queue.")
+        await command.get_message().channel.send(embed=Util.create_simple_embed(f"Bad source was provided. Nothing will be added to the queue.", MessageType.NEGATIVE))
         return None
     else:
         return source_string
@@ -291,7 +294,7 @@ async def parse_playlist_request(command: Command):
 # loop forever
 @client.event
 async def on_playlist_watcher():
-    await default_media_text_channel.send("I am now taking song and media requests.")
+    await default_media_text_channel.send("**I am now taking song and media requests.**")
     while True:
         # if there is something in the playlist queue, attempt to play it
         if not playlist.is_end():
@@ -301,7 +304,7 @@ async def on_playlist_watcher():
             
             # cancel this media and move to next if the author not known for some reason
             if not request.get_requester():
-                await default_media_text_channel.send("Requester is not known. Cannot follow!")
+                await default_media_text_channel.send(embed=Util.create_simple_embed("Requester is not known. Cannot follow!", MessageType.FATAL))
                 playlist.iterate_queue()
                 continue
 
@@ -317,7 +320,7 @@ async def on_playlist_watcher():
                         media_manager.set_voice_client(await target_voice_channel.connect())
                         media_manager.set_voice_channel(target_voice_channel)
                     except:
-                        print("\terror joining a voice channel")
+                        print("\tUnknown error joining a voice channel")
 
                 # if the bot is already in the target channel, do nothing
                 elif media_manager.get_voice_channel() == target_voice_channel:
@@ -342,11 +345,11 @@ async def on_playlist_watcher():
                 stream = await media_manager.get_stream_from_url(source_string)
                 await default_media_text_channel.send(
                     f"**Now playing:**", 
-                    embed=Util.create_playlist_item_embed(request, playlist))
+                    embed=Util.create_playlist_item_embed(request, playlist, MessageType.INFO))
                 
                 if not stream or not source_string:
                     # if something bad really happens, skip this track
-                    await default_media_text_channel.send('Bad source. Exiting.')
+                    await default_media_text_channel.send(embed=Util.create_simple_embed('Bad source. Exiting.', MessageType.FATAL))
                     media_manager.get_voice_client().stop()
                     await media_manager.get_voice_client().disconnect()
                     playlist.allow_progress(True)
@@ -369,10 +372,13 @@ async def on_playlist_watcher():
                 match playlist.get_requested_action():
                     case PlaylistAction.FORWARD:
                         playlist.iterate_queue()
+                        await default_media_text_channel.send(embed=Util.create_simple_embed('Skipping forward one media track.', MessageType.INFO))
                     case PlaylistAction.BACKWARD:
                         playlist.move_back_queue()
+                        await default_media_text_channel.send(embed=Util.create_simple_embed('Going back one media track.', MessageType.INFO))
                     case PlaylistAction.STAY:
                         playlist.iterate_queue()
+                        await default_media_text_channel.send(embed=Util.create_simple_embed('Track is done. Moving to next one.', MessageType.INFO))
                     case _:
                         print(f"unknown action `{playlist.get_requested_action()}`")
 
@@ -380,12 +386,13 @@ async def on_playlist_watcher():
                 playlist.request_movement(PlaylistAction.STAY)
                 playlist.allow_progress(False)
             else:
-                await default_media_text_channel.send(f'{request.get_requester().name} is not in a voice channel. Going to next playlist item')
+                await default_media_text_channel.send(embed=Util.create_simple_embed(f'{request.get_requester().name} is not in a voice channel. Going to next playlist item.', MessageType.NEGATIVE))
                 playlist.iterate_queue()
             print("\tEnd of media playlist loop")
         else:
             # playlist has nothing on it or at its end. Retract the bot and do nothing
             if media_manager.get_voice_channel():
+                await default_media_text_channel.send(embed=Util.create_simple_embed('Playlist queue is empty. I am leaving.', MessageType.INFO))
                 await disconnect_from_voice()
         await asyncio.sleep(1)
 

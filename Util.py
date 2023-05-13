@@ -1,5 +1,15 @@
+from enum import Enum
+import discord
 from LinearPlaylist import LinearPlaylist
 from PlaylistRequest import PlaylistRequest
+
+class MessageType(Enum):
+    FATAL = 0xDC3545 #Red
+    NEGATIVE = 0xFFC107 #Orange
+    POSITIVE = 0x28A745 #Green
+    INFO = 0x17A2B8 #Gray/Blue
+    PLAYLIST_ITEM = 0x007BFF #Blue
+    PLAYLIST_ALL = 0x007BFF #Blue
 
 class Util:
     BOT_COMMAND_CHANNEL_NAMES = ['bot-spam', 'bot-commands', 'botspam']
@@ -26,15 +36,14 @@ class Util:
     def get_file_location_from_url(file_protocol: str) -> str:
         return file_protocol[len(Util.FILE_PROTOCOL_PREFIX):]
         
-    def create_playlist_item_embed(request: PlaylistRequest, playlist: LinearPlaylist):
-        import discord
+    def create_playlist_item_embed(request: PlaylistRequest, playlist: LinearPlaylist, type=MessageType.POSITIVE):
         from Metadata import Metadata
         metadata = Metadata(request)
 
         embed = discord.Embed(
             title=metadata.title,
             url=metadata.url,
-            color=request.get_requester().color.value,
+            color=type.value,
             # timestamp=request.get_request_time()
         )
         embed.set_thumbnail(url=metadata.image_url)
@@ -46,12 +55,11 @@ class Util:
         embed.set_footer(text=f"Requested by {request.get_requester()} ({request.get_requester().display_name}) on {request.get_request_time().strftime('%A, %b %d, %I:%M:%S %p')}")
         return embed
     
-    def create_playlist_embed(playlist: LinearPlaylist, full=False):
-        import discord
+    def create_playlist_embed(playlist: LinearPlaylist, full=False, type=MessageType.PLAYLIST_ALL):
         from Metadata import Metadata
 
         # create embed
-        embed = discord.Embed(title="Current Playlist", color=discord.Color.green())
+        embed = discord.Embed(title="Current Playlist", color=type.value)
 
         # show history
         if full:
@@ -74,6 +82,9 @@ class Util:
             m = Metadata(n)
             queue_string = queue_string + f"{i+1}. {m.title} by {m.author} ({m.runtime})\n"
         embed.add_field(name="Queue", value=queue_string, inline=False)
-
+        return embed
+    
+    def create_simple_embed(text="Placeholder Text", type=MessageType.POSITIVE) -> discord.Embed:
+        embed = discord.Embed(description=text, color=type.value)
         return embed
         
