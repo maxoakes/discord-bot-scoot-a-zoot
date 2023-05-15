@@ -155,7 +155,6 @@ async def perform_route(command: Command):
                     if is_bot_in_same_voice_channel_as_author:
                         if current_bot_voice_channel:
                             playlist.request_movement(PlaylistAction.FORWARD)
-                            print(f"Intended target: {playlist.get_next_queue()[0].get_source_string()}")
 
             # stop the current media and go to previous item on the queue history
             case 'prev' | 'back' | 'reverse':
@@ -166,7 +165,6 @@ async def perform_route(command: Command):
                         else:
                             playlist.move_back_queue()
                             playlist.get_now_playing().update_requester(command.get_author())
-                        print(f"Intended target: {playlist.get_prev_queue()[-1].get_source_string()}")
 
             # clear the playlist queue
             case 'clear':

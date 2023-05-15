@@ -7,7 +7,7 @@ class Metadata:
     title: str
     author: str
     runtime: str
-    views: int
+    views: str
     created_at: str
     image_url: str
 
@@ -22,6 +22,9 @@ class Metadata:
         self.image_url = None
 
         if self.url.find(Util.YOUTUBE_URL_PREFIX_FULL) > -1 or self.url.find(Util.YOUTUBE_URL_PREFIX_SHORT) > -1:
+            import locale
+            locale.setlocale(locale.LC_ALL, 'en_US')
+            
             import youtube_dl
             youtube = youtube_dl.YoutubeDL(Util.YTDL_OPTIONS)
             info = youtube.extract_info(self.url, download=False)
@@ -29,7 +32,7 @@ class Metadata:
             self.title = info.get('title')
             self.author = info.get('uploader') # or 'uploader'?
             self.runtime = Metadata.seconds_to_string(info.get('duration'))
-            self.views = info.get('view_count')
+            self.views = locale.format("%d", info.get('view_count'), grouping=True)
             timestamp = datetime.date.fromisoformat(info.get('upload_date'))
             self.created_at = timestamp.strftime('%A, %b %d, %Y')
             self.image_url = info.get('thumbnail')
@@ -37,7 +40,9 @@ class Metadata:
             self.author = info.get('album_artist') if info.get('album_artist') else self.author
             self.created_at = info.get('release_year') if info.get('release_year') else self.created_at
         else:
-            self.title = f"{self.url.split('//')[-1][:40]}..."
+            title = self.url.split('//')[-1]
+            leading = "" if len(title) <= 40 else "..." 
+            self.title = f"{title[:40]}{leading}"
             self.author = "Unknown"
             self.runtime = Metadata.seconds_to_string(None)
             self.views = "Unknown"
@@ -46,6 +51,6 @@ class Metadata:
     def seconds_to_string(sec) -> str:
         import math
         if sec:
-            return f"{math.floor(sec/60)}:{sec % 60}"
+            return f"{math.floor(sec/60)}:{str(sec % 60).zfill(2)}"
         else:
             return "??:??"
