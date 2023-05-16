@@ -1,7 +1,7 @@
 from enum import Enum
 import discord
-from LinearPlaylist import LinearPlaylist
-from PlaylistRequest import PlaylistRequest
+from DJ.LinearPlaylist import LinearPlaylist
+from DJ.PlaylistRequest import PlaylistRequest
 
 class MessageType(Enum):
     FATAL = 0xDC3545 #Red
@@ -38,7 +38,7 @@ class Util:
         return file_protocol[len(Util.FILE_PROTOCOL_PREFIX):]
         
     def create_playlist_item_embed(request: PlaylistRequest, playlist: LinearPlaylist, type=MessageType.POSITIVE):
-        from Metadata import Metadata
+        from DJ.Metadata import Metadata
         metadata = Metadata(request)
 
         embed = discord.Embed(
@@ -58,7 +58,7 @@ class Util:
         return embed
     
     def create_playlist_embed(playlist: LinearPlaylist, full=False, type=MessageType.PLAYLIST_ALL):
-        from Metadata import Metadata
+        from DJ.Metadata import Metadata
 
         # create embed
         embed = discord.Embed(title="Current Playlist", color=type.value)

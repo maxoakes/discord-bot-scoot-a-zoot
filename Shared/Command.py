@@ -73,6 +73,9 @@ class Command:
     def get_channel(self):
         return self.__channel
     
+    def get_guild(self):
+        return self.__channel.guild
+    
     def get_message(self):
         return self.__message
     

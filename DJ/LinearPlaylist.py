@@ -1,6 +1,6 @@
 import discord
 from enum import Enum
-from PlaylistRequest import PlaylistRequest
+from DJ.PlaylistRequest import PlaylistRequest
 
 class PlaylistAction(Enum):
     STAY = 0

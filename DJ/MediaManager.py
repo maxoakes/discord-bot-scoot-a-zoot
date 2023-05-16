@@ -1,5 +1,5 @@
 from discord import FFmpegOpusAudio, FFmpegPCMAudio
-from Util import Util
+from Shared.Util import Util
 
 class MediaManager:
 
