@@ -17,21 +17,22 @@ class Util:
     AFFIRMATIVE_RESPONSE = ['y', 'ya', 'ye', 'yea', 'yes', 'yeah', 't', 'true']
     NEGATIVE_RESPONSE = ['n', 'no', 'nah', 'nay', 'f', 'false']
     END_RESPONSE = ['s', 'stop', 'e', 'end', 'exit', 'h', 'halt']
-    FFMPEG_PATH = r"A:/Programs/ffmpeg/bin/ffmpeg.exe"
     YTDL_OPTIONS = {'format': 'bestaudio/best', 'noplaylist':'True', 'quiet':'True'}
-    FFMPEG_OPTS = {'before_options': '-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5', 'options': '-vn -filter:a "volume=0.25"', 'executable': FFMPEG_PATH}
     FILE_PROTOCOL_PREFIX = "file://"
     YOUTUBE_URL_PREFIX_FULL = "https://www.youtube.com/watch?"
     YOUTUBE_URL_PREFIX_SHORT = "https://youtu.be/"
     
     def get_youtube_playable_link(video_url: str) -> str:
+        
         import youtube_dl
-        if video_url.find(Util.YOUTUBE_URL_PREFIX_FULL) > -1 or video_url.find(Util.YOUTUBE_URL_PREFIX_SHORT) > -1:
-            youtube = youtube_dl.YoutubeDL(Util.YTDL_OPTIONS)
+        youtube = youtube_dl.YoutubeDL(Util.YTDL_OPTIONS)
+        try:
             info = youtube.extract_info(video_url, download=False)
             return info['formats'][0]['url']
-        else:
+        except Exception as e:
+            print(f"ERROR: something went wrong getting info via YTDL. Will assume input string is the direct media URL: {e}")
             return video_url
+
         
     def get_file_location_from_url(file_protocol: str) -> str:
         return file_protocol[len(Util.FILE_PROTOCOL_PREFIX):]
@@ -42,17 +43,18 @@ class Util:
 
         embed = discord.Embed(
             title=metadata.title,
-            url=metadata.url,
+            url=metadata.url if metadata.url.find('http') > -1 else None,
             color=type.value,
             # timestamp=request.get_request_time()
         )
         embed.set_thumbnail(url=metadata.image_url)
+        embed.add_field(name="Source", value=metadata.truncated_url, inline=False)
         embed.add_field(name="Author", value=metadata.author, inline=False)
         embed.add_field(name="Length", value=metadata.runtime, inline=True)
         embed.add_field(name="Views", value=metadata.views, inline=True)
         embed.add_field(name="Created", value=metadata.created_at, inline=True)
         embed.add_field(name="Remaining media in playlist queue", value=len(playlist.get_next_queue()), inline=False)
-        embed.set_footer(text=f"Requested by {request.get_requester()} ({request.get_requester().display_name}) on {request.get_request_time().strftime('%A, %b %d, %I:%M:%S %p')}")
+        embed.set_footer(text=f"Requested by {request.get_requester().display_name} on {request.get_request_time().strftime('%A, %I:%M:%S %p')} (Opus:{request.use_opus()})")
         return embed
     
     def create_playlist_embed(playlist: LinearPlaylist, full=False, type=MessageType.PLAYLIST_ALL):

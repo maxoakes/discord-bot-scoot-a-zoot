@@ -128,20 +128,20 @@ async def perform_route(command: Command):
                         import youtube_search
                         results = youtube_search.YoutubeSearch(command.get_command_from(2), max_results=1).to_dict()
                         url = f"https://www.youtube.com{results[0]['url_suffix']}"
-                        request = PlaylistRequest(url, command.get_author())
-                        playlist.add_queue(request )
+                        request = PlaylistRequest(url, command.get_author(), command.does_arg_exist('opus'))
+                        playlist.add_queue(request)
                         await default_media_text_channel.send("**Added to playlist queue**", embed=Util.create_playlist_item_embed(request, playlist, MessageType.POSITIVE))
                     case _:
                         await default_media_text_channel.send(embed=Util.create_simple_embed(f"Unknown service. Consult `>>help search`", MessageType.NEGATIVE))
 
             # add something to the playlist
             case 'add' | 'stream' | 'listen' | 'queue':
-                source = await parse_playlist_request(command)
+                (source, use_opus) = await parse_playlist_request(command)
                 if source.find('http') == -1 and source.find('file') == -1:
                     await default_media_text_channel.send(embed=Util.create_simple_embed(f"Bad source URI. Must be an `http://`, `https://` or `file://` protocol", MessageType.NEGATIVE))
                     return
                 if source:
-                    request = PlaylistRequest(source, command.get_author())
+                    request = PlaylistRequest(source, command.get_author(), use_opus)
                     playlist.add_queue(request)
                     await default_media_text_channel.send("**Added to playlist queue**", embed=Util.create_playlist_item_embed(request, playlist, MessageType.POSITIVE))
 
@@ -265,6 +265,7 @@ async def parse_quote_request(command: Command):
 async def parse_playlist_request(command: Command):
     # acquire the target source from the input string
     source_string = command.get_command_from(1).strip()
+    use_opus = command.does_arg_exist('opus')
 
     # check if there is a preset quest
     preset = command.get_arg('preset')
@@ -275,9 +276,10 @@ async def parse_playlist_request(command: Command):
             with open('presets.csv', newline='', encoding='utf-8') as file:
                 reader = csv.reader(file)
                 for row in reader:
-                    # print(row) # [preset, url, is_vid]
+                    # print(row) # [preset, url, desc, use_opus]
                     if row[0].lower() == preset.lower():
                         source_string = row[1]
+                        use_opus = row[3].lower() in Util.AFFIRMATIVE_RESPONSE
         except Exception as e:
             await command.get_message().channel.send(f"How did this happen, <{os.getenv('AUTHOR_MENTION')}>?", embed=Util.create_simple_embed("An error occurred getting a the media presets, nothing will be added to the queue.", MessageType.FATAL))
             print(e)
@@ -285,9 +287,9 @@ async def parse_playlist_request(command: Command):
     # if there was no source url or valid preset, it is a bad request
     if source_string == "":
         await command.get_message().channel.send(embed=Util.create_simple_embed(f"Bad source was provided. Nothing will be added to the queue.", MessageType.NEGATIVE))
-        return None
+        return (None, False)
     else:
-        return source_string
+        return (source_string, use_opus)
 
 # loop forever
 @client.event
@@ -340,7 +342,7 @@ async def on_playlist_watcher():
                 
                 # play the stream
                 source_string = request.get_source_string()
-                stream = await media_manager.get_stream_from_url(source_string)
+                stream = await media_manager.get_stream_from_url(source_string, request.use_opus())
                 await default_media_text_channel.send(
                     f"**Now playing:**", 
                     embed=Util.create_playlist_item_embed(request, playlist, MessageType.INFO))
