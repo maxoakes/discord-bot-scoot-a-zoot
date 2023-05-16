@@ -75,7 +75,7 @@ async def on_message(message: discord.Message):
 
         # print the list of commands
         case 'help':
-            await command.get_channel().send(Help.get_help_markdown(command.get_command_from(1)))
+            await command.get_channel().send(Help.get_text_help_markdown(command.get_command_from(1)))
 
         # there is an unknown command that a user entered in the media text channel
         case _:

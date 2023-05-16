@@ -163,8 +163,8 @@ async def perform_route(command: Command):
                         current_bot_voice_client.resume()
 
         # print the list of commands
-        case "help":
-            await command.get_channel().send(Help.get_help_markdown(command.get_command_from(1)))
+        case 'help':
+            await command.get_channel().send(Help.get_dj_help_markdown(command.get_command_from(1)))
 
         # there is an unknown command that a user entered in the media text channel
         case _:
