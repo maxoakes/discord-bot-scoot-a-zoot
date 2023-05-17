@@ -1,4 +1,4 @@
-from Shared.Util import Util
+from Util import Util
 from DJ.PlaylistRequest import PlaylistRequest
 
 class Metadata:

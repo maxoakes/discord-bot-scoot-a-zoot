@@ -1,11 +1,12 @@
 import os
 from dotenv import load_dotenv
 from discord import FFmpegOpusAudio, FFmpegPCMAudio
-from Shared.Util import Util
+from Util import Util
 
 class MediaManager:
 
     FFMPEG_OPTS = {'before_options': '-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5', 'options': '-vn -filter:a "volume=0.25"'}
+    FILE_PROTOCOL_PREFIX = "file://"
     __voice_client = None
     __current_voice_channel = None
 
@@ -26,8 +27,8 @@ class MediaManager:
     
     async def get_stream_from_url(self, source_string: str, is_opus=False):
         # if it is a local file on this computer
-        if source_string.find(Util.FILE_PROTOCOL_PREFIX) > -1:
-            return FFmpegPCMAudio(executable=os.getenv('FFMPEG_PATH'), source=Util.get_file_location_from_url(source_string))
+        if source_string.find(MediaManager.FILE_PROTOCOL_PREFIX) > -1:
+            return FFmpegPCMAudio(executable=os.getenv('FFMPEG_PATH'), source=source_string[len(MediaManager.FILE_PROTOCOL_PREFIX):])
         else:
             if is_opus:
                 return await FFmpegOpusAudio.from_probe(Util.get_youtube_playable_link(source_string), executable=os.getenv('FFMPEG_PATH'), **MediaManager.FFMPEG_OPTS, method='fallback')

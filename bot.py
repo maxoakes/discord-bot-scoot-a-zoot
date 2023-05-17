@@ -4,10 +4,10 @@ import discord
 import asyncio
 from dotenv import load_dotenv
 from Bot.Call import Call
-from Shared.Help import Help
+from Help import Help
 from Bot.Quote import Quote
-from Shared.Command import Command
-from Shared.Util import MessageType, Util
+from Command import Command
+from Util import MessageType, Util
 
 # set up variable storage
 load_dotenv()

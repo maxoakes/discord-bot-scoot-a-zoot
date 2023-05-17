@@ -1,6 +1,7 @@
 import discord
 from enum import Enum
 from DJ.PlaylistRequest import PlaylistRequest
+from Util import MessageType
 
 class PlaylistAction(Enum):
     STAY = 0
@@ -104,6 +105,35 @@ class LinearPlaylist:
         else:
             return self.__playlist[self.__current_index]
     
+    def get_embed(self, full=False, type=MessageType.PLAYLIST_ALL):
+        from DJ.Metadata import Metadata
+
+        # create embed
+        embed = discord.Embed(title="Current Playlist", color=type.value)
+
+        # show history
+        if full:
+            prev_queue = self.get_prev_queue()
+            prev_string = ""
+            for p in prev_queue:
+                m = Metadata(p)
+                prev_string = prev_string + f"{m.title} by {m.author} ({m.runtime})\n"
+            embed.add_field(name="Play History", value=prev_string, inline=False)
+        
+        # show now playing
+        now_playing = self.get_now_playing()
+        curr = Metadata(now_playing)
+        embed.add_field(name="Now Playing", value=f"{curr.title} by {curr.author} ({curr.runtime})", inline=False)
+
+        # show queue
+        next_queue = self.get_next_queue()
+        queue_string = ""
+        for i, n in enumerate(next_queue):
+            m = Metadata(n)
+            queue_string = queue_string + f"{i+1}. {m.title} by {m.author} ({m.runtime})\n"
+        embed.add_field(name="Queue", value=queue_string, inline=False)
+        return embed
+
     def __str__(self):
         if len(self.__playlist) == 0:
             return "There is nothing on the playlist."

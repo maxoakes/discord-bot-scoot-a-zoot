@@ -3,9 +3,9 @@ import sys
 import discord
 import asyncio
 from dotenv import load_dotenv
-from Shared.Help import Help
-from Shared.Command import Command
-from Shared.Util import MessageType, Util
+from Help import Help
+from Command import Command
+from Util import MessageType, Util
 from DJ.MediaManager import MediaManager
 from DJ.LinearPlaylist import LinearPlaylist, PlaylistAction
 from DJ.PlaylistRequest import PlaylistRequest
@@ -95,7 +95,7 @@ async def perform_route(command: Command):
                     url = f"https://www.youtube.com{results[0]['url_suffix']}"
                     request = PlaylistRequest(url, command.get_author(), command.does_arg_exist('opus'))
                     playlist.add_queue(request)
-                    await default_channel.send("**Added to playlist queue**", embed=Util.create_playlist_item_embed(request, playlist, MessageType.POSITIVE))
+                    await default_channel.send(f"**Added to playlist queue**", embed=request.get_embed(MessageType.POSITIVE, pos=len(playlist.get_next_queue())))
                 case _:
                     await default_channel.send(embed=Util.create_simple_embed(f"Unknown service. Consult `>>help search`", MessageType.NEGATIVE))
 
@@ -108,11 +108,11 @@ async def perform_route(command: Command):
             if source:
                 request = PlaylistRequest(source, command.get_author(), use_opus)
                 playlist.add_queue(request)
-                await default_channel.send("**Added to playlist queue**", embed=Util.create_playlist_item_embed(request, playlist, MessageType.POSITIVE))
+                await default_channel.send(f"**Added to playlist queue**", embed=request.get_embed(MessageType.POSITIVE, pos=len(playlist.get_next_queue())))
 
         # show the current playlist
         case 'playlist' | 'pl' | 'show':
-            await default_channel.send(embed=Util.create_playlist_embed(playlist, command.does_arg_exist('full'), MessageType.INFO))
+            await default_channel.send(embed=playlist.get_embed(command.does_arg_exist('full'), MessageType.INFO))
 
         # skip the current media and go to the next queue item
         case 'next' | 'skip' | 'pass':
@@ -252,7 +252,7 @@ async def on_playlist_watcher():
                 stream = await media_manager.get_stream_from_url(source_string, request.use_opus())
                 await default_channel.send(
                     f"**Now playing:**", 
-                    embed=Util.create_playlist_item_embed(request, playlist, MessageType.INFO))
+                    embed=request.get_embed(MessageType.INFO))
                 
                 if not stream or not source_string:
                     # if something bad really happens, skip this track
