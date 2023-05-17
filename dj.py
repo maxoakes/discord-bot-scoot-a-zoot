@@ -75,7 +75,7 @@ async def on_message(message: discord.Message):
         return
     
     # if the message is a command, try to route and parse it
-    if message.content.startswith(Command.COMMAND_CHAR) and message.channel == default_channel:
+    if message.content.startswith(Command.COMMAND_CHAR) and message.channel.id == default_channel.id:
         command = Command(message)
         await perform_route(command)
 
@@ -181,7 +181,7 @@ async def parse_playlist_request(command: Command):
         # if there is a preset request, try to find that preset
         import csv
         try:
-            with open('presets.csv', newline='', encoding='utf-8') as file:
+            with open(r'DJ/presets.csv', newline='', encoding='utf-8') as file:
                 reader = csv.reader(file)
                 for row in reader:
                     # print(row) # [preset, url, desc, use_opus]
@@ -189,7 +189,7 @@ async def parse_playlist_request(command: Command):
                         source_string = row[1]
                         use_opus = row[3].lower() in Util.AFFIRMATIVE_RESPONSE
         except Exception as e:
-            await command.get_message().channel.send(f"How did this happen, <{os.getenv('AUTHOR_MENTION')}>?", embed=Util.create_simple_embed("An error occurred getting a the media presets, nothing will be added to the queue.", MessageType.FATAL))
+            await command.get_message().channel.send(f"How did this happen, {os.getenv('AUTHOR_MENTION')}?", embed=Util.create_simple_embed("An error occurred getting a the media presets, nothing will be added to the queue.", MessageType.FATAL))
             print(e)
 
     # if there was no source url or valid preset, it is a bad request
