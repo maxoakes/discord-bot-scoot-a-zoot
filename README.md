@@ -10,7 +10,7 @@ Required dependencies to `pip install`:
 * `ffmpeg`
 * `asyncio`
 * `PyNaCl`
-* `dotenv`
+* `python-dotenv`
 * `youtube_dl`
     * `pip install --upgrade --force-reinstall "git+https://github.com/ytdl-org/youtube-dl.git"`
 * `youtube-search`
