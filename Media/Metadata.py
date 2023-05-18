@@ -1,5 +1,5 @@
 from Util import Util
-from DJ.PlaylistRequest import PlaylistRequest
+from Media.PlaylistRequest import PlaylistRequest
 
 class Metadata:
     url: str

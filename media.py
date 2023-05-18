@@ -6,9 +6,9 @@ from dotenv import load_dotenv
 from Help import Help
 from Command import Command
 from Util import MessageType, Util
-from DJ.MediaManager import MediaManager
-from DJ.LinearPlaylist import LinearPlaylist, PlaylistAction
-from DJ.PlaylistRequest import PlaylistRequest
+from Media.MediaManager import MediaManager
+from Media.LinearPlaylist import LinearPlaylist, PlaylistAction
+from Media.PlaylistRequest import PlaylistRequest
 
 # set up variable storage
 load_dotenv()

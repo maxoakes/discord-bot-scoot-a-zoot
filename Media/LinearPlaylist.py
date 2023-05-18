@@ -1,6 +1,6 @@
 import discord
 from enum import Enum
-from DJ.PlaylistRequest import PlaylistRequest
+from Media.PlaylistRequest import PlaylistRequest
 from Util import MessageType
 
 class PlaylistAction(Enum):
