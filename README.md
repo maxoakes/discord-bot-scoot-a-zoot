@@ -16,25 +16,4 @@ Required dependencies to `pip install`:
 * `youtube-search`
 * `requests`
 
-APIs to look into:
-https://api.mcsrvstat.us/
-https://playerdb.co/
-https://pokeapi.co/
-https://www.abstractapi.com/api/ip-geolocation-api
-https://ipbase.com/
-https://www.geoapify.com/maps-api
-https://covidtracking.com/data/api/version-2
-https://products.wolframalpha.com/api/
-https://www.audiomack.com/data-api/docs
-https://docs.genius.com/
-https://www.last.fm/api
-https://api.radio-browser.info/
-https://api.nasa.gov/
-https://earthquake.usgs.gov/fdsnws/event/1/
-https://waterservices.usgs.gov/
-https://haveibeenpwned.com/API/v3
-https://github.com/4chan/4chan-API
-https://www.foaas.com/
-https://dev.twitch.tv/docs
-https://www.dicebear.com/
-https://docs.aviationapi.com/
+```pip install discord.py ffmpeg asyncio pynacl python-dotenv youtube-search requests --upgrade --force-reinstall "git+https://github.com/ytdl-org/youtube-dl.git"```
