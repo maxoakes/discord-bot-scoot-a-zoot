@@ -31,7 +31,7 @@ class PlaylistRequest:
         return self.__use_opus
     
     def get_embed(self, type=MessageType.POSITIVE, pos=0):
-        from DJ.Metadata import Metadata
+        from Media.Metadata import Metadata
         metadata = Metadata(self)
 
         embed = discord.Embed(

@@ -106,7 +106,7 @@ class LinearPlaylist:
             return self.__playlist[self.__current_index]
     
     def get_embed(self, full=False, type=MessageType.PLAYLIST_ALL):
-        from DJ.Metadata import Metadata
+        from Media.Metadata import Metadata
 
         # create embed
         embed = discord.Embed(title="Current Playlist", color=type.value)
