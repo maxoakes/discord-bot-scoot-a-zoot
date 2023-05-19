@@ -1,7 +1,5 @@
 import os
-import sys
 import discord
-import asyncio
 from dotenv import load_dotenv
 from Bot.Call import Call
 from Help import Help
@@ -13,9 +11,7 @@ from Util import MessageType, Util
 load_dotenv()
 intents = discord.Intents.all()
 client = discord.Client(intents=intents)
-
-# set in on_ready
-default_channels: dict[int, int] = {}
+default_channels: dict[int, int] = {} # [key=guild id, val=channel id]
 
 # on startup
 @client.event
@@ -29,7 +25,7 @@ async def on_ready():
         # attempt to find default command channel
         for channel in guild.text_channels:
             if channel.permissions_for(guild.me).send_messages:
-                if channel.name in Util.BOT_COMMAND_CHANNEL_NAMES:
+                if channel.name in ['bot-spam', 'bot-commands', 'botspam']:
                     temp_default_channel = channel
         
         # if a default command channel is not found, attempt to assign a fallback channel that the users can send commands

@@ -51,6 +51,9 @@ class Metadata:
         except Exception as e:
             print(f"ERROR: Problem getting YTDL info: {e}")
 
+    # #################################
+    # Static functions
+    # #################################
 
     def seconds_to_string(sec) -> str:
         import math

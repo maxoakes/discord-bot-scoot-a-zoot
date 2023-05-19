@@ -10,6 +10,9 @@ from Media.MediaManager import MediaManager
 from Media.LinearPlaylist import LinearPlaylist, PlaylistAction
 from Media.PlaylistRequest import PlaylistRequest
 
+MEDIA_PRESETS_PATH = r'Media/presets.csv'
+POLL_FREQ = 0.2
+
 # set up variable storage
 load_dotenv()
 intents = discord.Intents.all()
@@ -51,7 +54,7 @@ async def on_ready():
     # attempt to find the two types of channels for the purpose of this bot
     for channel in this_guild.text_channels:
         if channel.permissions_for(this_guild.me).send_messages:
-            if channel.name in Util.MEDIA_REQUEST_CHANNEL_NAMES:
+            if channel.name in ['jukebox', 'music-requests', 'dj-requests']:
                 default_channel = channel
         
     # if media channel is not found, attempt to assign a fallback channel that the users can send commands
@@ -185,7 +188,7 @@ async def parse_playlist_request(command: Command):
         # if there is a preset request, try to find that preset
         import csv
         try:
-            with open(r'DJ/presets.csv', newline='', encoding='utf-8') as file:
+            with open(MEDIA_PRESETS_PATH, newline='', encoding='utf-8') as file:
                 reader = csv.reader(file)
                 for row in reader:
                     # print(row) # [preset, url, desc, use_opus]
@@ -210,17 +213,16 @@ async def parse_playlist_request(command: Command):
 async def on_playlist_watcher():
     await default_channel.send("**I am now taking song and media requests.**")
     while True:
+        await asyncio.sleep(POLL_FREQ)
         # check if playlist has anything in the queue
         if playlist.is_end():
             if media_manager.get_voice_channel():
                 await default_channel.send(embed=Util.create_simple_embed('Playlist queue is empty. I am leaving.', MessageType.INFO))
                 await disconnect_from_voice()
-            await asyncio.sleep(0.5)
             continue
 
         # if the playlist has something in it
         request = playlist.get_now_playing()
-        print(f"Starting iteration with {request.get_source_string()}")
         
         # cancel this media and move to next if the author not known for some reason
         if not request.get_requester():
@@ -264,7 +266,6 @@ async def on_playlist_watcher():
         # play the stream
         source_string = request.get_source_string()
         stream = await media_manager.get_stream_from_url(source_string, request.use_opus())
-        await default_channel.send(f"**Now playing:**", embed=request.get_embed(MessageType.INFO))
         
         if not stream or not source_string:
             # if something bad really happens, skip this track
@@ -273,11 +274,12 @@ async def on_playlist_watcher():
             await media_manager.get_voice_client().disconnect()
             playlist.allow_progress(True)
         else:
+            await default_channel.send(f"**Now playing:**", embed=request.get_embed(MessageType.INFO))
             media_manager.get_voice_client().play(stream, after=after_media)
 
         # locking mechanism, stream will not iterate until func after_media is run
         while True:
-            await asyncio.sleep(0.5)
+            await asyncio.sleep(POLL_FREQ)
             # if the media track has ended
             if playlist.can_progress():
                 break
@@ -287,7 +289,6 @@ async def on_playlist_watcher():
                 media_manager.get_voice_client().stop() # triggers after_media to run
         
         # if we get here, the playlist can progress
-        print(f"\tNEXT: can_progress:{playlist.can_progress()}, movement:{playlist.get_requested_action()}")
         match playlist.get_requested_action():
             case PlaylistAction.FORWARD:
                 playlist.iterate_queue()
@@ -305,8 +306,7 @@ async def on_playlist_watcher():
         # reset movement for next iteration
         playlist.request_movement(PlaylistAction.STAY)
         playlist.allow_progress(False)
-        print("\tEnd of media playlist loop")
-        await asyncio.sleep(1)
+        print(f'End of media play loop')
 
 # #################
 # Helper Functions

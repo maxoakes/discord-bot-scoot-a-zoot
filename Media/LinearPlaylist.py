@@ -15,7 +15,7 @@ class LinearPlaylist:
     __do_progress: bool
 
     __playlist: list[PlaylistRequest] = []
-    __current_index: int = 0 # if -1, the playlist is not initialized
+    __current_index: int = 0
     
     def __init__(self, client: discord.Client):
         self.__playlist = []
@@ -47,7 +47,6 @@ class LinearPlaylist:
     def add_queue(self, request: PlaylistRequest) -> list[PlaylistRequest]:
         # initialize the playlist with the first request
         self.__playlist.append(request)
-        self.__client_ref.dispatch("media_playlist_update")
         return self.__playlist[self.__current_index:]
     
     def get_next_queue(self) -> list[PlaylistRequest]:
@@ -70,7 +69,6 @@ class LinearPlaylist:
             return None
         else:
             self.__current_index = self.__current_index + 1
-            self.__client_ref.dispatch("media_playlist_update")
             if self.is_end():
                 return None
             else:
@@ -84,7 +82,6 @@ class LinearPlaylist:
                 return self.__playlist[0]
             else:
                 self.__current_index = self.__current_index - 1
-                self.__client_ref.dispatch("media_playlist_update")
                 return self.__playlist[self.__current_index]
         
     def clear_queue(self, clear_prev=False) -> None:
@@ -96,7 +93,6 @@ class LinearPlaylist:
                 self.__current_index = 0
             else:
                 self.__playlist = self.__playlist[0:self.__current_index]
-            self.__client_ref.dispatch("media_playlist_update")
             return
     
     def get_now_playing(self) -> PlaylistRequest:
