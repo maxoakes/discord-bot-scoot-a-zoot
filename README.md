@@ -19,7 +19,6 @@ Required dependencies to `pip install`:
 ```pip install discord.py ffmpeg asyncio pynacl python-dotenv youtube-search requests --upgrade --force-reinstall "git+https://github.com/ytdl-org/youtube-dl.git"```
 
 TODO:
-* Find reason and solution to time delay between song request and song playing in voice channel
-    * Youtube_DL info extract -> 2 seconds
+* Find ways to reduce time consuming blocking actions:
+    * Youtube_DL info extract -> up to 2 seconds
     * Create stream object from FFMPEG -> 2 seconds
-    * Youtube search from keywords -> 0.8 seconds

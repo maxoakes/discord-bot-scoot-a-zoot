@@ -25,7 +25,7 @@ class PlaylistRequest:
         loop = asyncio.get_event_loop()
         info = await loop.run_in_executor(None, lambda: youtube.extract_info(self.__raw_source, download=False))
         self.__metadata = Metadata(self.__raw_source, info, is_file)
-        print(f"metadata build time: {datetime.datetime.now().timestamp() - t.timestamp()}")
+        print(f"Metadata build time for {self.__metadata.title}: {datetime.datetime.now().timestamp() - t.timestamp()}")
         return self.__metadata
     
     def get_metadata(self):

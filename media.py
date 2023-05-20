@@ -1,22 +1,23 @@
 import os
 import sys
-import discord
+import datetime
 from discord.ext import commands
 import asyncio
 import youtube_search
 from dotenv import load_dotenv
-from Help import Help
 from Command import Command
 from Util import MessageType, Util
 from Media.MediaManager import MediaManager
 from Media.LinearPlaylist import LinearPlaylist, PlaylistAction
 from Media.PlaylistRequest import PlaylistRequest
+# debug items
+import threading
+import discord
 
 MEDIA_PRESETS_PATH = r'Media/presets.csv'
 POLL_FREQ = 1.0
+T = datetime.datetime.now().timestamp()
 
-# threading
-media_player_loop = asyncio.get_event_loop()
 # set up variable storage
 load_dotenv()
 intents = discord.Intents.all()
@@ -72,7 +73,7 @@ async def on_ready():
 
     # send opening message
     print(f"Initialized for '{this_guild.name}' with default-channel='{default_channel}'")
-    bot.dispatch('media_player')
+    # bot.dispatch('media_player')
 
 
 # #####################################
@@ -102,6 +103,7 @@ async def command_search(context: commands.Context):
     if request:
         await default_channel.send(f"**Adding this search result to playlist queue:**", embed=request.get_embed(MessageType.POSITIVE, pos=len(playlist.get_next_queue())))
         playlist.add_queue(request)
+        await media_play()
 
 
 @bot.command(name='stream', aliases=['add', 'listen', 'queue'], hidden=False, brief='Add a specific URL to the playlist queue')
@@ -126,7 +128,6 @@ async def command_stream(context: commands.Context):
                 f"How did this happen, {os.getenv('AUTHOR_MENTION')}?", 
                 embed=Util.create_simple_embed("An error occurred getting a the media presets, nothing will be added to the queue.", MessageType.FATAL))
             print(f'Error processing presets file: {e}')
-
     # if there was no source url or valid preset, it is a bad request
     if source_string == "" or (source_string.find('http') != 0 and source_string.find('file') != 0):
         await default_channel.send(embed=Util.create_simple_embed(f"Bad source URI. Must be an `http://`, `https://` or `file://` protocol", MessageType.NEGATIVE))
@@ -136,6 +137,7 @@ async def command_stream(context: commands.Context):
         await request.create_metadata(source_string.find(Util.FILE_PROTOCOL_PREFIX) == 0)
         playlist.add_queue(request)
         await default_channel.send(f"**Added to playlist queue:**", embed=request.get_embed(MessageType.POSITIVE, pos=len(playlist.get_next_queue())))
+        await media_play()
 
 
 @bot.command(name='playlist', aliases=['pl'], hidden=False, brief='Show the playlist queue')
@@ -148,6 +150,7 @@ async def command_playlist(context: commands.Context):
 async def command_skip(context: commands.Context):
     if user_in_voice_channel(context.author) and in_same_voice_channel(context.author) and media_manager.get_voice_channel():
         playlist.request_movement(PlaylistAction.FORWARD)
+        media_manager.get_voice_client().stop()
 
 
 @bot.command(name='back', aliases=['prev', 'reverse'], hidden=False, brief='Move back one media track')
@@ -156,9 +159,7 @@ async def command_back(context: commands.Context):
         if in_same_voice_channel(context.author):
             if media_manager.get_voice_channel():
                 playlist.request_movement(PlaylistAction.BACKWARD)
-            else:
-                playlist.move_back_queue()
-                playlist.get_now_playing().update_requester(context.author)
+                media_manager.get_voice_client().stop()
 
 
 @bot.command(name='end', aliases=['quit', 'close'], hidden=False, brief='Stops media and clears queue')
@@ -209,107 +210,88 @@ async def command_presets(context: commands.Context):
 
 
 # #####################################
-# Loop Event
+# Media controller
 # #####################################
 
-@bot.event
-async def on_media_player():
-    await default_channel.send("**I am now taking song and media requests.**")
-    while True:
-        await asyncio.sleep(POLL_FREQ)
-        # check if playlist has anything in the queue
-        if playlist.is_end():
-            if media_manager.get_voice_channel():
-                await default_channel.send(embed=Util.create_simple_embed('Playlist queue is empty. I am leaving.', MessageType.INFO))
-                await disconnect_from_voice()
-            continue
-
-        # if the playlist has something in it
-        request = playlist.get_now_playing()
-        
-        # cancel this media and move to next if the author not known for some reason
-        if not request.get_requester():
-            await default_channel.send(embed=Util.create_simple_embed("Requester is not known. Cannot follow!", MessageType.FATAL))
+async def update_playlist_pointer():
+    media_manager.get_voice_client().stop()
+    match playlist.get_requested_action():           
+        case PlaylistAction.FORWARD:
             playlist.iterate_queue()
-            continue
-
-        # check if the requester is in a voice channel so they can be followed
-        target_voice_state = request.get_requester().voice
-        if not target_voice_state:
-            await default_channel.send(embed=Util.create_simple_embed(f'{request.get_requester().name} is not in a voice channel. Going to next playlist item.', MessageType.NEGATIVE))
+            await default_channel.send(embed=Util.create_simple_embed('Skipping forward one media track.', MessageType.INFO))
+        case PlaylistAction.BACKWARD:
+            playlist.move_back_queue()
+            await default_channel.send(embed=Util.create_simple_embed('Going back one media track.', MessageType.INFO))
+        case PlaylistAction.STAY:
+            await default_channel.send(embed=Util.create_simple_embed('Track is done. Moving to next one.', MessageType.INFO))
             playlist.iterate_queue()
-            continue
+    await media_play()
 
-        # find the voice channel of the requester
-        target_voice_channel: discord.channel.VocalGuildChannel = target_voice_state.channel
+async def media_play():
 
-        # if the bot is not in a channel, join the correct one
-        if media_manager.get_voice_channel() == None:
-            try:
-                media_manager.set_voice_client(await target_voice_channel.connect())
-                media_manager.set_voice_channel(target_voice_channel)
-            except:
-                print("\tUnknown error joining a voice channel")
+    if playlist.is_end():
+        await default_channel.send(embed=Util.create_simple_embed("End of playlist. I am leaving. Use `stream` or `search` to request media!", MessageType.INFO))
+        await disconnect_from_voice()
+        return
+    
+    if is_audio_playing():
+        print("Media play requested, but audio is active")
+        return
+    
+    # if the playlist has something in it
+    request = playlist.get_now_playing()
+    
+    # cancel this media and move to next if the author not known for some reason
+    if not request.get_requester():
+        await default_channel.send(embed=Util.create_simple_embed("Requester is not known. Cannot follow!", MessageType.FATAL))
+        playlist.iterate_queue()
+        return
 
-        # if the bot is already in the target channel, do nothing
-        elif media_manager.get_voice_channel() == target_voice_channel:
-            pass
+    # check if the requester is in a voice channel so they can be followed
+    target_voice_state = request.get_requester().voice
+    if not target_voice_state:
+        await default_channel.send(embed=Util.create_simple_embed(f'{request.get_requester().name} is not in a voice channel. Going to next playlist item.', MessageType.NEGATIVE))
+        playlist.iterate_queue()
+        return
 
-        # if the bot is in a different channel than the requester, disconnect and switch to the target one
-        else:
-            await media_manager.get_voice_client().disconnect()
-            media_manager.set_voice_channel(target_voice_channel)
+    # find the voice channel of the requester
+    target_voice_channel: discord.channel.VocalGuildChannel = target_voice_state.channel
+
+    # if the bot is not in a channel, join the correct one
+    if media_manager.get_voice_channel() == None:
+        try:
             media_manager.set_voice_client(await target_voice_channel.connect())
+            media_manager.set_voice_channel(target_voice_channel)
+        except:
+            print("\tUnknown error joining a voice channel")
 
-        # define what to do when the track ends
-        def after_media(error):
-            print(f'\tEnded stream for {request.get_requester().guild.name} with error: {error}')
-            playlist.allow_progress(True) # toggle switch to progress to next track
-        
-        # play the stream
-        source_string = request.get_playable_url()
-        stream = await media_manager.get_stream_from_url(source_string, request.use_opus())
-        
-        if not stream or not source_string:
-            # if something bad really happens, skip this track
-            await default_channel.send(embed=Util.create_simple_embed('Bad source. Exiting.', MessageType.FATAL))
-            media_manager.get_voice_client().stop()
-            await media_manager.get_voice_client().disconnect()
-            playlist.allow_progress(True)
-        else:
-            await default_channel.send(f"**Now playing:**", embed=request.get_embed(MessageType.INFO))
-            media_manager.get_voice_client().play(stream, after=after_media)
+    # if the bot is already in the target channel, do nothing
+    elif media_manager.get_voice_channel() == target_voice_channel:
+        pass
 
-        # locking mechanism, stream will not iterate until func after_media is run
-        while True:
-            await asyncio.sleep(POLL_FREQ)
-            # if the media track has ended
-            if playlist.can_progress():
-                break
-            if playlist.get_requested_action() != PlaylistAction.STAY:
-                # happens when a user requests to skip or move back one track
-                print(f'\tRequest to move {playlist.get_requested_action()}')
-                media_manager.get_voice_client().stop() # triggers after_media to run
-        
-        # if we get here, the playlist can progress
-        match playlist.get_requested_action():
-            case PlaylistAction.FORWARD:
-                playlist.iterate_queue()
-                await default_channel.send(embed=Util.create_simple_embed('Skipping forward one media track.', MessageType.INFO))
-            case PlaylistAction.BACKWARD:
-                playlist.move_back_queue()
-                await default_channel.send(embed=Util.create_simple_embed('Going back one media track.', MessageType.INFO))
-            case PlaylistAction.STAY:
-                playlist.iterate_queue()
-                await default_channel.send(embed=Util.create_simple_embed('Track is done. Moving to next one.', MessageType.INFO))
-            case _:
-                playlist.iterate_queue()
-                print(f"unknown action `{playlist.get_requested_action()}`")
+    # if the bot is in a different channel than the requester, disconnect and switch to the target one
+    else:
+        await media_manager.get_voice_client().disconnect()
+        media_manager.set_voice_channel(target_voice_channel)
+        media_manager.set_voice_client(await target_voice_channel.connect())
 
-        # reset movement for next iteration
-        playlist.request_movement(PlaylistAction.STAY)
-        playlist.allow_progress(False)
-        print(f'End of media play loop')
+    # define what to do when the track ends
+    def after_media(error):
+        print(f'\tEnded stream for {request.get_requester().guild.name} with error: {error}')
+        media_manager.media_loop.create_task(update_playlist_pointer())
+    
+    # play the stream
+    source_string = request.get_playable_url()
+    stream = await media_manager.get_stream_from_url(source_string, request.use_opus())
+    
+    if not stream or not source_string:
+        # if something bad really happens, skip this track
+        await default_channel.send(embed=Util.create_simple_embed('Bad source. Exiting.', MessageType.FATAL))
+        media_manager.get_voice_client().stop()
+        after_media(None)
+    else:
+        await default_channel.send(f"**Now playing:**", embed=request.get_embed(MessageType.INFO))
+        media_manager.get_voice_client().play(stream, after=after_media)
 
 
 # #####################################
@@ -332,6 +314,11 @@ async def service_search(command: Command):
             case _:
                 await default_channel.send(embed=Util.create_simple_embed(f"Unknown service. Available search providers are `youtube`.", MessageType.NEGATIVE))
         return request
+
+
+def is_audio_playing():
+    return media_manager.get_voice_client() and media_manager.get_voice_client().is_playing()
+        
 
 def in_same_voice_channel(user: discord.Member | discord.User) -> bool:
     if not user.voice:
@@ -357,5 +344,20 @@ async def disconnect_from_voice():
         await media_manager.get_voice_client().disconnect()
     media_manager.set_voice_channel(None)
 
+
+# #####################################
+# Debug
+# #####################################
+
+def print_threads():
+    out = f"Threads ({threading.active_count()}): "
+    for t in threading.enumerate():
+        out = out + f"'{t.name}', "
+    print(out)
+
+def print_time_diff(loc: str):
+    global T
+    print(f'  {datetime.datetime.now().timestamp() - T}\t:{loc}')
+    T = datetime.datetime.now().timestamp()
 
 bot.run(os.getenv('DJ_TOKEN'))

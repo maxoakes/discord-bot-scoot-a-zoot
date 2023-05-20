@@ -9,7 +9,6 @@ class PlaylistAction(Enum):
     STAY = 0
     FORWARD = 1
     BACKWARD = 2
-    STOP = 3
 
 class LinearPlaylist:
     __client_ref: discord.Client
