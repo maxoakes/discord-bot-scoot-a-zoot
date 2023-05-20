@@ -1,9 +1,7 @@
-from Util import Util
-from Media.PlaylistRequest import PlaylistRequest
-
 class Metadata:
     url: str
     truncated_url: str
+    playable_url: str
     title: str
     author: str
     runtime: str
@@ -11,9 +9,9 @@ class Metadata:
     created_at: str
     image_url: str
 
-    def __init__(self, request: PlaylistRequest):
+    def __init__(self, source, info: dict, is_file=False):
         # attempt to find all the metadata
-        self.url = request.get_source_string()
+        self.url = source
         self.truncated_url = self.url.split('//')[-1]
         leading = "" if len(self.truncated_url) <= 55 else "..." 
         self.truncated_url = f"{self.truncated_url[:55]}{leading}" # default fallback title
@@ -24,11 +22,15 @@ class Metadata:
         self.created_at = "Unknown"
         self.image_url = ""
         
-        import youtube_dl
-        youtube = youtube_dl.YoutubeDL(Util.YTDL_OPTIONS)
+        # if it is a local file, do something way different
+        if is_file:
+            return
+        
         try:
-            info = youtube.extract_info(self.url, download=False)
-
+            if info.get('formats'):
+                self.playable_url = info['formats'][0]['url']
+            else:
+                self.playable_url = self.url
             self.title = info.get('title', self.truncated_url)
             self.author = info.get('uploader', self.author) # or 'uploader'?
             self.runtime = Metadata.seconds_to_string(info.get('duration'))

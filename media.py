@@ -1,7 +1,9 @@
 import os
 import sys
 import discord
+from discord.ext import commands
 import asyncio
+import youtube_search
 from dotenv import load_dotenv
 from Help import Help
 from Command import Command
@@ -13,26 +15,28 @@ from Media.PlaylistRequest import PlaylistRequest
 MEDIA_PRESETS_PATH = r'Media/presets.csv'
 POLL_FREQ = 0.2
 
+# threading
+media_player_loop = asyncio.get_event_loop()
 # set up variable storage
 load_dotenv()
 intents = discord.Intents.all()
-client = discord.Client(intents=intents)
+bot = commands.Bot(command_prefix=Command.COMMAND_CHAR, intents=intents)
 media_manager: MediaManager = MediaManager()
-playlist: LinearPlaylist = LinearPlaylist(client)
+playlist: LinearPlaylist = LinearPlaylist(bot)
 
 # set in on_ready
 this_guild: discord.Guild
 default_channel: discord.TextChannel = None
 
 # on startup
-@client.event
+@bot.event
 async def on_ready():
     global default_channel
     global this_guild
 
     # select the server to manage
     print("Available Guilds:")
-    for i, g in enumerate(client.guilds):
+    for i, g in enumerate(bot.guilds):
         print(f"  [{i}] = {g.name} ({g.id})")
     
     try:
@@ -41,12 +45,12 @@ async def on_ready():
             selected_guild = int(sys.argv[1])
         else:
             selected_guild = input("Index Number Guild to manage: ")
-        this_guild = client.guilds[int(selected_guild)]
+        this_guild = bot.guilds[int(selected_guild)]
     except:
         print("ERROR, Could not properly parse input. Selecting first entry...")
-        this_guild = client.guilds[0]
+        this_guild = bot.guilds[0]
 
-    print(f"We have logged in as {client.user} and am now managing '{this_guild.name}' ({this_guild.id}).")
+    print(f"We have logged in as {bot.user} and am now managing '{this_guild.name}' ({this_guild.id}).")
 
     # attempt to find the default channel
     temp_default_channel = this_guild.system_channel
@@ -68,130 +72,58 @@ async def on_ready():
 
     # send opening message
     print(f"Initialized for '{this_guild.name}' with default-channel='{default_channel}'")
-    client.dispatch('playlist_watcher')
+    asyncio.run_coroutine_threadsafe(media_player(), media_player_loop)
 
-# user commands
-@client.event
-async def on_message(message: discord.Message):
-    if message.author == client.user:
-        return
-    
-    if not message.content.startswith(Command.COMMAND_CHAR):
-        return
-    
-    if message.channel.id != default_channel.id:
-        return
-    
-    command = Command(message)
-    await perform_route(command)
 
-async def perform_route(command: Command):
-    is_author_in_voice_channel = user_in_voice_channel(command.get_author())
-    is_bot_in_same_voice_channel_as_author = in_same_voice_channel(command.get_author())
-    current_bot_voice_channel = media_manager.get_voice_channel()
-    current_bot_voice_client = media_manager.get_voice_client()
+# #####################################
+# Commands
+# #####################################
 
-    match command.get_part(0):
-        # lookup AND add to queue from a service
-        case 'search' | 'lookup' | 'query':
-            match command.get_part(1).lower():
-                case 'youtube' | 'yt':
-                    import youtube_search
-                    results = youtube_search.YoutubeSearch(command.get_command_from(2), max_results=1).to_dict()
-                    url = f"https://www.youtube.com{results[0]['url_suffix']}"
-                    request = PlaylistRequest(url, command.get_author(), command.does_arg_exist('opus'))
-                    playlist.add_queue(request)
-                    await default_channel.send(f"**Added to playlist queue**", embed=request.get_embed(MessageType.POSITIVE, pos=len(playlist.get_next_queue())))
-                case _:
-                    await default_channel.send(embed=Util.create_simple_embed(f"Unknown service. Consult `>>help search`", MessageType.NEGATIVE))
+@bot.command(name='work', hidden=True)
+async def command_work(context: commands.Context, arg=200):
+    await default_channel.send(f"Working...")
+    q = 2
+    for i in range(int(arg)):
+        q = pow(q, q) % 500000
+        # await asyncio.sleep(0.1)
+        print((i))
+    await default_channel.send(f"Done working {i}")
 
-        # add media from specific URL to the playlist
-        case 'add' | 'stream' | 'listen' | 'queue':
-            (source, use_opus) = await parse_playlist_request(command)
-            if source.find('http') == -1 and source.find('file') == -1:
-                await default_channel.send(embed=Util.create_simple_embed(f"Bad source URI. Must be an `http://`, `https://` or `file://` protocol", MessageType.NEGATIVE))
-                return
-            
-            if source:
-                request = PlaylistRequest(source, command.get_author(), use_opus)
-                playlist.add_queue(request)
-                await default_channel.send(f"**Added to playlist queue**", embed=request.get_embed(MessageType.POSITIVE, pos=len(playlist.get_next_queue())))
 
-        # show the current playlist
-        case 'playlist' | 'pl' | 'show':
-            await default_channel.send(embed=playlist.get_embed(command.does_arg_exist('full'), MessageType.INFO))
+@bot.command(name='ping', aliases=['pp'], hidden=True, brief='Get a response')
+async def command_ping(context: commands.Context):
+    await context.reply('pong')
 
-        # skip the current media and go to the next queue item
-        case 'next' | 'skip' | 'pass':
-            if is_author_in_voice_channel:
-                if is_bot_in_same_voice_channel_as_author:
-                    if current_bot_voice_channel:
-                        playlist.request_movement(PlaylistAction.FORWARD)
 
-        # stop the current media and go to previous item on the queue history
-        case 'prev' | 'back' | 'reverse':
-            if is_author_in_voice_channel:
-                if is_bot_in_same_voice_channel_as_author:
-                    if current_bot_voice_channel:
-                        playlist.request_movement(PlaylistAction.BACKWARD)
-                    else:
-                        playlist.move_back_queue()
-                        playlist.get_now_playing().update_requester(command.get_author())
+@bot.command(name='test', aliases=['t'], hidden=True, brief='Print verbose response of the command')
+async def command_test(context: commands.Context):
+    command = Command(context.message)
+    await context.send(command)
 
-        # clear the playlist queue
-        case 'clear':
-            clear_all = command.does_arg_exist('all')
-            playlist.clear_queue(clear_all)
-            if clear_all:
-                await default_channel.send(embed=Util.create_simple_embed("Queue and history have been cleared.", MessageType.INFO))
-            else:
-                await default_channel.send(embed=Util.create_simple_embed("Queue has been cleared.", MessageType.INFO))
-            
-        # clear the queue, stop playing, and return the voice bot
-        case 'end':
-            if is_author_in_voice_channel:
-                if is_bot_in_same_voice_channel_as_author:
-                    if current_bot_voice_client:
-                        playlist.clear_queue()
-                        await disconnect_from_voice()
 
-        # pause playing and maintain the bot in the current channel
-        case 'pause':
-            if is_author_in_voice_channel:
-                if is_bot_in_same_voice_channel_as_author:
-                    if current_bot_voice_client:
-                        current_bot_voice_client.pause()
-        
-        # resume playing in the bot's current channel
-        case 'resume':
-            if is_author_in_voice_channel:
-                if is_bot_in_same_voice_channel_as_author:
-                    if current_bot_voice_client:
-                        current_bot_voice_client.resume()
+@bot.command(name='search', aliases=['lookup', 'query'], hidden=False, brief='Search a service for some media')
+async def command_search(context: commands.Context):
+    command = Command(context.message)
+    request = await service_search(command)
+    if request:
+        await default_channel.send(f"**Adding this search result to playlist queue:**", embed=request.get_embed(MessageType.POSITIVE, pos=len(playlist.get_next_queue())))
+        playlist.add_queue(request)
 
-        # print the list of commands
-        case 'help':
-            await command.get_channel().send(Help.get_dj_help_markdown(command.get_command_from(1)))
 
-        # there is an unknown command that a user entered in the media text channel
-        case _:
-            await command.get_channel().send(embed=Util.create_simple_embed(f"Unknown action `{command.get_part(0)}`.", MessageType.NEGATIVE))
-
-async def parse_playlist_request(command: Command):
-    # acquire the target source from the input string
+@bot.command(name='stream', aliases=['add', 'listen', 'queue'], hidden=False, brief='Add a specific URL to the playlist queue')
+async def command_stream(context: commands.Context):
+    command = Command(context.message)
     source_string = command.get_command_from(1).strip()
     use_opus = command.does_arg_exist('opus')
-
-    # check if there is a preset quest
     preset = command.get_arg('preset')
     if preset:
-        # if there is a preset request, try to find that preset
+        # if there is a preset, get it from the presets file
         import csv
         try:
             with open(MEDIA_PRESETS_PATH, newline='', encoding='utf-8') as file:
                 reader = csv.reader(file)
                 for row in reader:
-                    # print(row) # [preset, url, desc, use_opus]
+                    # [preset, url, desc, use_opus]
                     if row[0].lower() == preset.lower():
                         source_string = row[1]
                         use_opus = row[3].lower() in Util.AFFIRMATIVE_RESPONSE
@@ -199,18 +131,94 @@ async def parse_playlist_request(command: Command):
             await command.get_message().channel.send(
                 f"How did this happen, {os.getenv('AUTHOR_MENTION')}?", 
                 embed=Util.create_simple_embed("An error occurred getting a the media presets, nothing will be added to the queue.", MessageType.FATAL))
-            print(e)
+            print(f'Error processing presets file: {e}')
 
     # if there was no source url or valid preset, it is a bad request
-    if source_string == "":
-        await command.get_message().channel.send(embed=Util.create_simple_embed(f"Bad source was provided. Nothing will be added to the queue.", MessageType.NEGATIVE))
-        return (None, False)
-    else:
-        return (source_string, use_opus)
+    if source_string == "" or (source_string.find('http') == -1 and source_string.find('file') == -1):
+        await default_channel.send(embed=Util.create_simple_embed(f"Bad source URI. Must be an `http://`, `https://` or `file://` protocol", MessageType.NEGATIVE))
+        return
+    if source_string:
+        request = PlaylistRequest(source_string, command.get_author(), use_opus)
+        await request.create_metadata(source_string.find('file://') == 0)
+        playlist.add_queue(request)
+        await default_channel.send(f"**Added to playlist queue:**", embed=request.get_embed(MessageType.POSITIVE, pos=len(playlist.get_next_queue())))
 
-# loop forever
-@client.event
-async def on_playlist_watcher():
+
+@bot.command(name='playlist', aliases=['pl'], hidden=False, brief='Show the playlist queue')
+async def command_playlist(context: commands.Context):
+    command = Command(context.message)
+    await default_channel.send(embed=playlist.get_embed(command.does_arg_exist('full'), MessageType.INFO))
+
+
+@bot.command(name='skip', aliases=['next', 'pass'], hidden=False, brief='Move forward one media track')
+async def command_skip(context: commands.Context):
+    if user_in_voice_channel(context.author) and in_same_voice_channel(context.author) and media_manager.get_voice_channel():
+        playlist.request_movement(PlaylistAction.FORWARD)
+
+
+@bot.command(name='back', aliases=['prev', 'reverse'], hidden=False, brief='Move back one media track')
+async def command_back(context: commands.Context):
+    if user_in_voice_channel(context.author):
+        if in_same_voice_channel(context.author):
+            if media_manager.get_voice_channel():
+                playlist.request_movement(PlaylistAction.BACKWARD)
+            else:
+                playlist.move_back_queue()
+                playlist.get_now_playing().update_requester(context.author)
+
+
+@bot.command(name='end', aliases=['quit', 'close'], hidden=False, brief='Stops media and clears queue')
+async def command_end(context: commands.Context):
+    if user_in_voice_channel(context.author) and in_same_voice_channel(context.author) and media_manager.get_voice_client():
+        playlist.clear_queue()
+        await disconnect_from_voice()
+
+
+@bot.command(name='pause', aliases=['halt'], hidden=False, brief='Pauses media, does not leave channel')
+async def command_pause(context: commands.Context):
+    if user_in_voice_channel(context.author) and in_same_voice_channel(context.author) and media_manager.get_voice_client():
+        media_manager.get_voice_client().pause()
+
+
+@bot.command(name='resume', aliases=['continue'], hidden=False, brief='Resumes media, if currently paused')
+async def command_resume(context: commands.Context):
+    if user_in_voice_channel(context.author) and in_same_voice_channel(context.author) and media_manager.get_voice_client():
+        media_manager.get_voice_client().resume()
+
+
+@bot.command(name='clear', hidden=False, brief='Clears the playlist queue')
+async def command_clear(context: commands.Context):
+    command = Command(context.message)
+    clear_all = command.does_arg_exist('all')
+    playlist.clear_queue(clear_all)
+    if clear_all:
+        await default_channel.send(embed=Util.create_simple_embed("Queue and history have been cleared.", MessageType.INFO))
+    else:
+        await default_channel.send(embed=Util.create_simple_embed("Queue has been cleared.", MessageType.INFO))
+
+
+@bot.command(name='presets', aliases=['preset'], hidden=False, brief='Show the list of available media presets')
+async def command_presets(context: commands.Context):
+    import csv
+    preset_list = ""
+    try:
+        with open(MEDIA_PRESETS_PATH, newline='', encoding='utf-8') as file:
+            reader = csv.reader(file)
+            for i, row in enumerate(reader):
+                # print(row) # [preset, url, desc]
+                if row[0].lower() != 'preset':
+                    preset_list = preset_list + f"\n {i}. `{row[0]}` {row[2]}"
+        out = f"**The following presets are available when requesting media streams in the format `>>stream --preset=<preset_name>`:**\n{preset_list}"
+    except:
+        out = "There was a problem reading the presets file."
+    await context.send(out)
+
+
+# #####################################
+# Loop Event
+# #####################################
+
+async def media_player():
     await default_channel.send("**I am now taking song and media requests.**")
     while True:
         await asyncio.sleep(POLL_FREQ)
@@ -264,7 +272,7 @@ async def on_playlist_watcher():
             playlist.allow_progress(True) # toggle switch to progress to next track
         
         # play the stream
-        source_string = request.get_source_string()
+        source_string = request.get_playable_url()
         stream = await media_manager.get_stream_from_url(source_string, request.use_opus())
         
         if not stream or not source_string:
@@ -308,9 +316,27 @@ async def on_playlist_watcher():
         playlist.allow_progress(False)
         print(f'End of media play loop')
 
-# #################
+
+# #####################################
 # Helper Functions
-# #################
+# #####################################
+
+async def service_search(command: Command):
+    service = command.get_part(1).lower()
+    keywords = command.get_command_from(2)
+    await default_channel.send(f"**Conducting search in `{service}` for `{keywords}`. Please wait...**")
+    request = None
+    async with command.get_channel().typing():
+        match service:
+            case 'youtube' | 'yt':
+                loop = asyncio.get_event_loop()
+                results =  await loop.run_in_executor(None, lambda: youtube_search.YoutubeSearch(keywords, max_results=1).to_dict())
+                url = f"https://www.youtube.com{results[0]['url_suffix']}"
+                request = PlaylistRequest(url, command.get_author(), command.does_arg_exist('opus'))
+                await request.create_metadata()
+            case _:
+                await default_channel.send(embed=Util.create_simple_embed(f"Unknown service. Available search providers are `youtube`.", MessageType.NEGATIVE))
+        return request
 
 def in_same_voice_channel(user: discord.Member | discord.User) -> bool:
     if not user.voice:
@@ -318,6 +344,7 @@ def in_same_voice_channel(user: discord.Member | discord.User) -> bool:
     else:
         return media_manager.get_voice_channel() == user.voice.channel
     
+
 def user_in_voice_channel(user: discord.Member | discord.User) -> bool:
     if not user.voice:
         return False
@@ -327,6 +354,7 @@ def user_in_voice_channel(user: discord.Member | discord.User) -> bool:
         else:
             return False
 
+
 async def disconnect_from_voice():
     if media_manager.get_voice_client():
         if media_manager.get_voice_client().is_playing():
@@ -334,4 +362,5 @@ async def disconnect_from_voice():
         await media_manager.get_voice_client().disconnect()
     media_manager.set_voice_channel(None)
 
-client.run(os.getenv('DJ_TOKEN'))
+
+bot.run(os.getenv('DJ_TOKEN'))

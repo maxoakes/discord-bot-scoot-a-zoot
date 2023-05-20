@@ -1,4 +1,5 @@
 import os
+import asyncio
 from dotenv import load_dotenv
 from discord import FFmpegOpusAudio, FFmpegPCMAudio
 from Util import Util
@@ -9,6 +10,7 @@ class MediaManager:
     FILE_PROTOCOL_PREFIX = "file://"
     __voice_client = None
     __current_voice_channel = None
+    __is_active = False
 
     def __init__(self):
         load_dotenv()
@@ -25,26 +27,19 @@ class MediaManager:
     def set_voice_channel(self, channel):
         self.__current_voice_channel = channel
 
+    def set_active(self, a: bool):
+        self.__is_active = a
+
+    def get_active(self):
+        return self.__is_active
+
     async def get_stream_from_url(self, source_string: str, is_opus=False):
         # if it is a local file on this computer
-        if source_string.find(MediaManager.FILE_PROTOCOL_PREFIX) > -1:
+        if source_string.find(MediaManager.FILE_PROTOCOL_PREFIX) == 0:
             return FFmpegPCMAudio(executable=os.getenv('FFMPEG_PATH'), source=source_string[len(MediaManager.FILE_PROTOCOL_PREFIX):])
         else:
             if is_opus:
-                return await FFmpegOpusAudio.from_probe(MediaManager.get_youtube_playable_link(source_string), executable=os.getenv('FFMPEG_PATH'), **MediaManager.FFMPEG_OPTS, method='fallback')
+                return await FFmpegOpusAudio.from_probe(source_string, executable=os.getenv('FFMPEG_PATH'), **MediaManager.FFMPEG_OPTS, method='fallback')
             else:
-                return FFmpegPCMAudio(source=MediaManager.get_youtube_playable_link(source_string), executable=os.getenv('FFMPEG_PATH'), **MediaManager.FFMPEG_OPTS)
+                return FFmpegPCMAudio(source=source_string, executable=os.getenv('FFMPEG_PATH'), **MediaManager.FFMPEG_OPTS)
 
-    # #################################
-    # Static functions
-    # #################################
-
-    def get_youtube_playable_link(video_url: str) -> str:
-        import youtube_dl
-        youtube = youtube_dl.YoutubeDL(Util.YTDL_OPTIONS)
-        try:
-            info = youtube.extract_info(video_url, download=False)
-            return info['formats'][0]['url']
-        except Exception as e:
-            print(f"ERROR: something went wrong getting info via YTDL. Will assume input string is the direct media URL: {e}")
-            return video_url

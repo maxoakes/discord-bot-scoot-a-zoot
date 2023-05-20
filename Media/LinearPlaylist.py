@@ -1,5 +1,7 @@
 import discord
+import datetime
 from enum import Enum
+from Media.Metadata import Metadata
 from Media.PlaylistRequest import PlaylistRequest
 from Util import MessageType
 
@@ -102,32 +104,24 @@ class LinearPlaylist:
             return self.__playlist[self.__current_index]
     
     def get_embed(self, full=False, type=MessageType.PLAYLIST_ALL):
-        from Media.Metadata import Metadata
-
+        
+        t = datetime.datetime.now()
         # create embed
         embed = discord.Embed(title="Current Playlist", color=type.value)
-
         # show history
         if full:
-            prev_queue = self.get_prev_queue()
             prev_string = ""
-            for p in prev_queue:
+            for p in self.get_prev_queue():
                 m = Metadata(p)
                 prev_string = prev_string + f"{m.title} by {m.author} ({m.runtime})\n"
             embed.add_field(name="Play History", value=prev_string, inline=False)
-        
         # show now playing
-        now_playing = self.get_now_playing()
-        curr = Metadata(now_playing)
+        curr = Metadata(self.get_now_playing())
         embed.add_field(name="Now Playing", value=f"{curr.title} by {curr.author} ({curr.runtime})", inline=False)
-
         # show queue
-        next_queue = self.get_next_queue()
-        queue_string = ""
-        for i, n in enumerate(next_queue):
+        for i, n in enumerate(self.get_next_queue()):
             m = Metadata(n)
-            queue_string = queue_string + f"{i+1}. {m.title} by {m.author} ({m.runtime})\n"
-        embed.add_field(name="Queue", value=queue_string, inline=False)
+            embed.add_field(name=f"Position {i+1}", value=f"{i+1}. {m.title} by {m.author} ({m.runtime})", inline=False)
         return embed
 
     def __str__(self):
