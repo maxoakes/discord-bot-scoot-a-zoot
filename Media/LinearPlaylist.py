@@ -112,15 +112,15 @@ class LinearPlaylist:
         if full:
             prev_string = ""
             for p in self.get_prev_queue():
-                m = Metadata(p)
+                m = p.get_metadata()
                 prev_string = prev_string + f"{m.title} by {m.author} ({m.runtime})\n"
             embed.add_field(name="Play History", value=prev_string, inline=False)
         # show now playing
-        curr = Metadata(self.get_now_playing())
+        curr = self.get_now_playing().get_metadata()
         embed.add_field(name="Now Playing", value=f"{curr.title} by {curr.author} ({curr.runtime})", inline=False)
         # show queue
         for i, n in enumerate(self.get_next_queue()):
-            m = Metadata(n)
+            m = n.get_metadata()
             embed.add_field(name=f"Position {i+1}", value=f"{i+1}. {m.title} by {m.author} ({m.runtime})", inline=False)
         return embed
 

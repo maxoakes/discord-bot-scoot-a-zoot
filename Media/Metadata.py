@@ -31,6 +31,7 @@ class Metadata:
                 self.playable_url = info['formats'][0]['url']
             else:
                 self.playable_url = self.url
+                
             self.title = info.get('title', self.truncated_url)
             self.author = info.get('uploader', self.author) # or 'uploader'?
             self.runtime = Metadata.seconds_to_string(info.get('duration'))

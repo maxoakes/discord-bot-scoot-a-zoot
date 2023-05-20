@@ -13,7 +13,7 @@ from Media.LinearPlaylist import LinearPlaylist, PlaylistAction
 from Media.PlaylistRequest import PlaylistRequest
 
 MEDIA_PRESETS_PATH = r'Media/presets.csv'
-POLL_FREQ = 0.2
+POLL_FREQ = 1.0
 
 # threading
 media_player_loop = asyncio.get_event_loop()
@@ -72,7 +72,7 @@ async def on_ready():
 
     # send opening message
     print(f"Initialized for '{this_guild.name}' with default-channel='{default_channel}'")
-    asyncio.run_coroutine_threadsafe(media_player(), media_player_loop)
+    bot.dispatch('media_player')
 
 
 # #####################################
@@ -81,24 +81,18 @@ async def on_ready():
 
 @bot.command(name='work', hidden=True)
 async def command_work(context: commands.Context, arg=200):
-    await default_channel.send(f"Working...")
+    await context.channel.send(f"Working...")
     q = 2
     for i in range(int(arg)):
         q = pow(q, q) % 500000
-        # await asyncio.sleep(0.1)
+        await asyncio.sleep(0.1)
         print((i))
-    await default_channel.send(f"Done working {i}")
+    await context.channel.send(f"Done working {i}")
 
 
 @bot.command(name='ping', aliases=['pp'], hidden=True, brief='Get a response')
 async def command_ping(context: commands.Context):
     await context.reply('pong')
-
-
-@bot.command(name='test', aliases=['t'], hidden=True, brief='Print verbose response of the command')
-async def command_test(context: commands.Context):
-    command = Command(context.message)
-    await context.send(command)
 
 
 @bot.command(name='search', aliases=['lookup', 'query'], hidden=False, brief='Search a service for some media')
@@ -134,12 +128,12 @@ async def command_stream(context: commands.Context):
             print(f'Error processing presets file: {e}')
 
     # if there was no source url or valid preset, it is a bad request
-    if source_string == "" or (source_string.find('http') == -1 and source_string.find('file') == -1):
+    if source_string == "" or (source_string.find('http') != 0 and source_string.find('file') != 0):
         await default_channel.send(embed=Util.create_simple_embed(f"Bad source URI. Must be an `http://`, `https://` or `file://` protocol", MessageType.NEGATIVE))
         return
     if source_string:
         request = PlaylistRequest(source_string, command.get_author(), use_opus)
-        await request.create_metadata(source_string.find('file://') == 0)
+        await request.create_metadata(source_string.find(Util.FILE_PROTOCOL_PREFIX) == 0)
         playlist.add_queue(request)
         await default_channel.send(f"**Added to playlist queue:**", embed=request.get_embed(MessageType.POSITIVE, pos=len(playlist.get_next_queue())))
 
@@ -218,7 +212,8 @@ async def command_presets(context: commands.Context):
 # Loop Event
 # #####################################
 
-async def media_player():
+@bot.event
+async def on_media_player():
     await default_channel.send("**I am now taking song and media requests.**")
     while True:
         await asyncio.sleep(POLL_FREQ)

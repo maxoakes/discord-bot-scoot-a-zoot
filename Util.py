@@ -14,6 +14,7 @@ class Util:
     NEGATIVE_RESPONSE = ['n', 'no', 'nah', 'nay', 'f', 'false']
     END_RESPONSE = ['s', 'stop', 'e', 'end', 'exit', 'h', 'halt', 'q', 'quit']
     YTDL_OPTIONS = {'format': 'bestaudio/best', 'noplaylist':'True', 'quiet':'True'}
+    FILE_PROTOCOL_PREFIX = "file://"
     
     def create_simple_embed(text="Placeholder Text", type=MessageType.POSITIVE) -> discord.Embed:
         embed = discord.Embed(description=text, color=type.value)
