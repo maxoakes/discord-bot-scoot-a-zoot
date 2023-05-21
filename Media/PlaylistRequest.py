@@ -21,10 +21,21 @@ class PlaylistRequest:
 
     async def create_metadata(self, is_file=False):
         t = datetime.datetime.now()
-        youtube = youtube_dl.YoutubeDL(Util.YTDL_OPTIONS)
-        loop = asyncio.get_event_loop()
-        info = await loop.run_in_executor(None, lambda: youtube.extract_info(self.__raw_source, download=False))
-        self.__metadata = Metadata(self.__raw_source, info, is_file)
+        info = None
+        is_unknown_source = False
+        if not is_file:
+            youtube = youtube_dl.YoutubeDL(Util.YTDL_OPTIONS)
+            loop = asyncio.get_event_loop()
+            try:
+                info = await loop.run_in_executor(None, lambda: youtube.extract_info(self.__raw_source, download=False))
+            except youtube_dl.utils.DownloadError as e:
+                print(f'YTDL error in create_metadata(): {e}')
+                is_unknown_source = True
+            except Exception as e:
+                print (f'Unknown error: {e}')
+                is_unknown_source = True
+
+        self.__metadata = Metadata(self.__raw_source, info, is_file, is_unknown_source)
         print(f"Metadata build time for {self.__metadata.title}: {datetime.datetime.now().timestamp() - t.timestamp()}")
         return self.__metadata
     

@@ -9,9 +9,10 @@ class Metadata:
     created_at: str
     image_url: str
 
-    def __init__(self, source, info: dict, is_file=False):
+    def __init__(self, source, info: dict, is_file=False, is_unknown_source=False):
         # attempt to find all the metadata
         self.url = source
+        self.playable_url = self.url
         self.truncated_url = self.url.split('//')[-1]
         leading = "" if len(self.truncated_url) <= 55 else "..." 
         self.truncated_url = f"{self.truncated_url[:55]}{leading}" # default fallback title
@@ -26,11 +27,13 @@ class Metadata:
         if is_file:
             return
         
+        if is_unknown_source:
+            self.title = "<Unknown Source>"
+            return
+        
         try:
             if info.get('formats'):
                 self.playable_url = info['formats'][0]['url']
-            else:
-                self.playable_url = self.url
                 
             self.title = info.get('title', self.truncated_url)
             self.author = info.get('uploader', self.author) # or 'uploader'?

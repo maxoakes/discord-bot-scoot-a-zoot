@@ -1,0 +1,13 @@
+    SUCCESS:
+>>search youtube now watch this drive short
+>>stream https://youtu.be/jNQXAC9IVRw?list=PLbpi6ZahtOH75Gj-P-YZYV6hSY5SHQKeV
+>>stream --preset=opb
+>>stream https://soundcloud.com/sting/fragile-1?utm_source=clipboard&utm_medium=text&utm_campaign=social_sharing
+>>stream https://twitter.com/bigcat74g/status/1660044896324161536
+>>stream https://media.discordapp.net/attachments/931964404533170246/1108852461831209121/puca_cheekworks.mp4
+>>stream file://A:\Music\Sting\The Last Ship (Deluxe)\16 - Sky Hooks And Tartan Paint (feat. Brian Johnson).mp3
+>>stream file://A:\Videos\Terraria\Terraria 2020.06.29 - 20.24.40.04.DVR.mp4
+    FAIL:
+>>search spotify sting
+>>stream https://open.spotify.com/track/6zOhqIUxnJllXN59FSvXcq?si=6f0de961039d4f5f
+>>stream https://www.netflix.com/watch/81513769?trackId=14186589
