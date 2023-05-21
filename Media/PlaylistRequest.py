@@ -39,14 +39,15 @@ class PlaylistRequest:
         print(f"Metadata build time for {self.__metadata.title}: {datetime.datetime.now().timestamp() - t.timestamp()}")
         return self.__metadata
     
-    def get_metadata(self):
+    async def get_metadata(self):
         if not self.__metadata:
             print(f"Had to force-acquire metadata for request: {self.__raw_source}")
-            self.create_metadata()
+            await self.create_metadata()
         return self.__metadata
     
-    def get_playable_url(self):
-        return self.get_metadata().playable_url
+    async def get_playable_url(self):
+        meta = await self.get_metadata()
+        return meta.playable_url
     
     def get_source_string(self):
         return self.__raw_source
@@ -64,8 +65,8 @@ class PlaylistRequest:
     def use_opus(self):
         return self.__use_opus
     
-    def get_embed(self, type=MessageType.POSITIVE, pos=0):
-        metadata = self.__metadata
+    async def get_embed(self, type=MessageType.POSITIVE, pos=0):
+        metadata = await self.get_metadata()
 
         embed = discord.Embed(
             title=metadata.title,

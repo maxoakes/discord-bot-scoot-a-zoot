@@ -102,7 +102,7 @@ class LinearPlaylist:
         else:
             return self.__playlist[self.__current_index]
     
-    def get_embed(self, full=False, type=MessageType.PLAYLIST_ALL):
+    async def get_embed(self, full=False, type=MessageType.PLAYLIST_ALL):
         # create embed
         embed = discord.Embed(title="Current Playlist", color=type.value)
 
@@ -110,20 +110,20 @@ class LinearPlaylist:
         if full:
             prev_string = ""
             for p in self.get_prev_queue():
-                m = p.get_metadata()
+                m = await p.get_metadata()
                 prev_string = prev_string + f"{m.title} by {m.author} ({m.runtime})\n"
             embed.add_field(name="Play History", value=prev_string, inline=False)
 
         # show now playing
         if self.get_now_playing():
             # add the currently playing media
-            curr = self.get_now_playing().get_metadata()
+            curr = await self.get_now_playing().get_metadata()
             embed.add_field(name="Now Playing", value=f"{curr.title} by {curr.author} ({curr.runtime})", inline=False)
 
             # show queue
             q = ""
             for i, n in enumerate(self.get_next_queue()):
-                m = n.get_metadata()
+                m = await n.get_metadata()
                 q = q + f"{i+1}. {m.title} by {m.author} ({m.runtime})\n"
             embed.add_field(name=f"Queue", value=q, inline=False)
         else:

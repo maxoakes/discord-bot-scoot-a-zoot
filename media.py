@@ -63,8 +63,7 @@ async def on_ready():
         print('WARNING, no default media request channel is accessible. This bot will not have full functionality.')
 
     # send opening message
-    print(f"Initialized for '{this_guild.name}' with default-channel='{default_channel}'")
-    # bot.dispatch('media_player')
+    print(f"READY! Initialized for '{this_guild.name}' with default-channel='{default_channel}'")
 
 
 # #####################################
@@ -92,7 +91,8 @@ async def command_search(context: commands.Context):
     command = Command(context.message)
     request = await service_search(command)
     if request:
-        await default_channel.send(f"**Adding this search result to playlist queue:**", embed=request.get_embed(MessageType.POSITIVE, pos=len(playlist.get_next_queue())))
+        embed = await request.get_embed(MessageType.POSITIVE, pos=len(playlist.get_next_queue()))
+        await default_channel.send(f"**Adding this search result to playlist queue:**", embed=embed)
         playlist.add_queue(request)
         await media_play()
 
@@ -129,14 +129,16 @@ async def command_stream(context: commands.Context):
             request = PlaylistRequest(source_string, command.get_author(), use_opus)
             await request.create_metadata(source_string.find(Util.FILE_PROTOCOL_PREFIX) == 0)
             playlist.add_queue(request)
-            await default_channel.send(f"**Added to playlist queue:**", embed=request.get_embed(MessageType.POSITIVE, pos=len(playlist.get_next_queue())))
+            embed = await request.get_embed(MessageType.POSITIVE, pos=len(playlist.get_next_queue()))
+            await default_channel.send(f"**Added to playlist queue:**", embed=embed)
         await media_play()
 
 
 @bot.command(name='playlist', aliases=['pl'], hidden=False, brief='Show the playlist queue')
 async def command_playlist(context: commands.Context):
     command = Command(context.message)
-    await default_channel.send(embed=playlist.get_embed(command.does_arg_exist('full'), MessageType.INFO))
+    embed = await playlist.get_embed(command.does_arg_exist('full'), MessageType.INFO)
+    await default_channel.send(embed=embed)
 
 
 @bot.command(name='skip', aliases=['next', 'pass'], hidden=False, brief='Move forward one media track')
@@ -270,11 +272,11 @@ async def media_play():
 
     # define what to do when the track ends
     def after_media(error):
-        print(f'\tEnded stream for {request.get_requester().guild.name} with error: {error}')
+        print(f'Ended stream for with error: {error}')
         media_manager.media_loop.create_task(update_playlist_pointer())
     
     # play the stream
-    source_string = request.get_playable_url()
+    source_string = await request.get_playable_url()
     stream = await media_manager.get_stream_from_url(source_string, request.use_opus())
     
     if not stream or not source_string:
@@ -283,8 +285,10 @@ async def media_play():
         media_manager.get_voice_client().stop()
         after_media(None)
     else:
-        await default_channel.send(f"**Now playing:**", embed=request.get_embed(MessageType.INFO))
+        embed = await request.get_embed(MessageType.INFO)
+        await default_channel.send(f"**Now playing:**", embed=embed)
         media_manager.get_voice_client().play(stream, after=after_media)
+        await buffer_for_seconds(1.0)
 
 
 # #####################################
@@ -333,5 +337,12 @@ async def disconnect_from_voice():
         await media_manager.get_voice_client().disconnect()
     media_manager.set_voice_channel(None)
 
+async def buffer_for_seconds(seconds: float):
+    if media_manager.get_voice_client() and seconds > 0.0:
+        print(f"  Allowing {seconds} second buffer")
+        media_manager.get_voice_client().pause()
+        await asyncio.sleep(seconds)
+        media_manager.get_voice_client().resume()
+        print(f"  Resuming...")
 
 bot.run(os.getenv('DJ_TOKEN'))
