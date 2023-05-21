@@ -10,6 +10,7 @@ class MessageType(Enum):
     INFO = 0x17A2B8 #Gray/Blue
     PLAYLIST_ITEM = 0x007BFF #Blue
     PLAYLIST_ALL = 0x007BFF #Blue
+    QUOTE = 0x007BFF #Blue
 
 class Util:
     AFFIRMATIVE_RESPONSE = ['y', 'ya', 'ye', 'yea', 'yes', 'yeah', 't', 'true']

@@ -1,3 +1,6 @@
+from Util import MessageType
+
+
 class Quote:
     __quote: str = None
     __author: str = "Anonymous"
@@ -61,7 +64,7 @@ class Quote:
     
     def get_embed(self):
         import discord
-        embed = discord.Embed(title="Quote (without quotation marks)", color=discord.Color.blue())
+        embed = discord.Embed(title="Quote (without quotation marks)", color=MessageType.QUOTE.value)
         embed.add_field(name="Text", value=self.__quote, inline=False)
         embed.add_field(name="Author", value=self.__author, inline=False)
         embed.add_field(name="Location", value=self.__location, inline=True)
