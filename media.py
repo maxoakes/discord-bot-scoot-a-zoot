@@ -198,7 +198,7 @@ async def command_presets(context: commands.Context):
                 # print(row) # [preset, url, desc]
                 if row[0].lower() != 'preset':
                     preset_list = preset_list + f"{i}. `{row[0]}` {row[2]}\n"
-        out = f"**The following presets are available when requesting media streams in the format `>>stream --preset=<preset_name>`:**\n{preset_list}"
+        out = f"**The following presets are available when requesting media streams in the format `{Command.COMMAND_CHAR}stream --preset=<preset_name>`:**\n{preset_list}"
     except:
         out = "There was a problem reading the presets file."
     await context.send(out)
