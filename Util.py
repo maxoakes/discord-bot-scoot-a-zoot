@@ -1,3 +1,5 @@
+import datetime
+import threading
 from enum import Enum
 import discord
 
@@ -15,8 +17,23 @@ class Util:
     END_RESPONSE = ['s', 'stop', 'e', 'end', 'exit', 'h', 'halt', 'q', 'quit']
     YTDL_OPTIONS = {'format': 'bestaudio/best', 'noplaylist':'True', 'quiet':'True'}
     FILE_PROTOCOL_PREFIX = "file://"
+    T = datetime.datetime.now().timestamp()
     
     def create_simple_embed(text="Placeholder Text", type=MessageType.POSITIVE) -> discord.Embed:
         embed = discord.Embed(description=text, color=type.value)
         return embed
         
+    # #####################################
+    # Debug
+    # #####################################
+
+    def print_threads():
+        out = f"Threads ({threading.active_count()}): "
+        for t in threading.enumerate():
+            out = out + f"'{t.name}', "
+        print(out)
+
+    def print_time_diff(loc: str):
+        global T
+        print(f'  {datetime.datetime.now().timestamp() - T}\t:{loc}')
+        T = datetime.datetime.now().timestamp()

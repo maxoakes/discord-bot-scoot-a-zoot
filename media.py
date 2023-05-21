@@ -1,6 +1,6 @@
 import os
 import sys
-import datetime
+import discord
 from discord.ext import commands
 import asyncio
 import youtube_search
@@ -10,22 +10,13 @@ from Util import MessageType, Util
 from Media.MediaManager import MediaManager
 from Media.LinearPlaylist import LinearPlaylist, PlaylistAction
 from Media.PlaylistRequest import PlaylistRequest
-# debug items
-import threading
-import discord
 
 MEDIA_PRESETS_PATH = r'Media/presets.csv'
-POLL_FREQ = 1.0
-T = datetime.datetime.now().timestamp()
-
-# set up variable storage
 load_dotenv()
 intents = discord.Intents.all()
 bot = commands.Bot(command_prefix=Command.COMMAND_CHAR, intents=intents)
 media_manager: MediaManager = MediaManager()
 playlist: LinearPlaylist = LinearPlaylist(bot)
-
-# set in on_ready
 this_guild: discord.Guild
 default_channel: discord.TextChannel = None
 
@@ -227,14 +218,14 @@ async def update_playlist_pointer():
             playlist.iterate_queue()
     await media_play()
 
-async def media_play():
 
+async def media_play():
     if playlist.is_end():
         await default_channel.send(embed=Util.create_simple_embed("End of playlist. I am leaving. Use `stream` or `search` to request media!", MessageType.INFO))
         await disconnect_from_voice()
         return
     
-    if is_audio_playing():
+    if media_manager.get_voice_client() and media_manager.get_voice_client().is_playing():
         print("Media play requested, but audio is active")
         return
     
@@ -316,10 +307,6 @@ async def service_search(command: Command):
         return request
 
 
-def is_audio_playing():
-    return media_manager.get_voice_client() and media_manager.get_voice_client().is_playing()
-        
-
 def in_same_voice_channel(user: discord.Member | discord.User) -> bool:
     if not user.voice:
         return False
@@ -344,20 +331,5 @@ async def disconnect_from_voice():
         await media_manager.get_voice_client().disconnect()
     media_manager.set_voice_channel(None)
 
-
-# #####################################
-# Debug
-# #####################################
-
-def print_threads():
-    out = f"Threads ({threading.active_count()}): "
-    for t in threading.enumerate():
-        out = out + f"'{t.name}', "
-    print(out)
-
-def print_time_diff(loc: str):
-    global T
-    print(f'  {datetime.datetime.now().timestamp() - T}\t:{loc}')
-    T = datetime.datetime.now().timestamp()
 
 bot.run(os.getenv('DJ_TOKEN'))
