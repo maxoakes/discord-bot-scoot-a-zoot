@@ -318,6 +318,109 @@ async def command_color(context: commands.Context):
     else:
         await command.get_channel().send(embed=Util.create_simple_embed(f"Unknown error processing request. Code {code}", MessageType.FATAL))
 
+
+@bot.command(name='buzz', hidden=False,
+    brief='Generate a buzzword tech phrase',
+    description='Generate a buzzword tech phrase')
+async def command_buzz(context: commands.Context):
+    command = Command(context.message)
+    (response, mime, code) = await Util.http_get('https://corporatebs-generator.sameerkumar.website/')
+
+    if (print_debug_if_needed(command, response)):
+        return
+    
+    # this API does not return 400 when it is a bad request...
+    if mime == ResponseType.JSON and code == 200:
+        phrase = response.get('phrase')
+        await command.get_channel().send(f'I present... **{phrase}**')
+    # if it is a bad response
+    else:
+        await command.get_channel().send(embed=Util.create_simple_embed(f"Unknown error processing request. Code {code}", MessageType.FATAL))
+
+
+@bot.command(name='fact', hidden=False,
+    brief='Generate a random fun-fact',
+    usage='(--de)',
+    description='Generate a random fun-fact. Also supports results in German.')
+async def command_fact(context: commands.Context):
+    command = Command(context.message)
+    suffix = '?language=de' if command.does_arg_exist('de') or command.does_arg_exist('germen') or command.does_arg_exist('deutsch') else ''
+    (response, mime, code) = await Util.http_get(f'https://uselessfacts.jsph.pl/api/v2/facts/random{suffix}')
+
+    if (print_debug_if_needed(command, response)):
+        return
+    
+    # this API does not return 400 when it is a bad request...
+    if mime == ResponseType.JSON and code == 200:
+        fact = response.get('text')
+        await command.get_channel().send(f'**Fun Fact:** {fact}')
+    # if it is a bad response
+    else:
+        await command.get_channel().send(embed=Util.create_simple_embed(f"Unknown error processing request. Code {code}", MessageType.FATAL))
+
+
+@bot.command(name='joke', hidden=False,
+    brief='Get a joke',
+    usage='[programming|dark|pun|spooky|christmas] (--nsfw) (--religious) (--political) (--racist) (--sexist) (--explicit) (--search=[string]) (--lang=[en|es|de|fr|cs|pt])',
+    description='Get a joke. Use --flags to blacklist types of jokes. Not specifying a category will yield any type of joke.')
+async def command_joke(context: commands.Context):
+    command = Command(context.message)
+
+    # get the list of request categories
+    categories = []
+    i = 1
+    while command.get_part(i) != '':
+        categories.append(command.get_part(i))
+        i = i + 1
+    if len(categories) == 0:
+        categories = ['Any']
+    categories_string = ','.join(categories)
+
+    # get all blacklisted categories
+    blacklisted = []
+    for flag in ['religious', 'political', 'racist', 'sexist', 'explicit']:
+        if command.does_arg_exist(flag):
+            blacklisted.append(flag)
+    blacklist_string = f'blacklistFlags={",".join(blacklisted)}&' if len(blacklisted) > 0 else ''
+
+    # get the language parameter
+    lang_string = ''
+    if command.get_arg('lang') in ['en', 'es', 'de', 'fr', 'cs', 'pt']:
+        lang_string = f'lang={command.get_arg("lang")}&'
+
+    # get any string to search
+    search_string = ''
+    if command.get_arg('search'):
+        lang_string = f'contains={command.get_arg("search")}&'
+
+    query_string = f'https://v2.jokeapi.dev/joke/{categories_string}?{lang_string}{blacklist_string}{search_string}'
+    print(query_string)
+    (response, mime, code) = await Util.http_get(query_string)
+
+    if (print_debug_if_needed(command, response)):
+        return
+    
+    # this API does not return 400 when it is a bad request...
+    if mime == ResponseType.JSON and code == 200:
+        preface = 'Here is a joke:\n'
+        joke_type = response.get('type')
+        if joke_type == 'single':
+            joke = response.get('joke')
+            await command.get_channel().send(f'{preface}*{joke}*')
+        elif joke_type == 'twopart':
+            setup = response.get('setup')
+            delivery = response.get('delivery')
+            await command.get_channel().send(f'{preface}*{setup}\n||{delivery}||*')
+        else:
+            if response.get('code') == 106: # 106 ?= no joke found
+                await command.get_channel().send(embed=Util.create_simple_embed("No joke matching the selected criteria. soz", MessageType.NEGATIVE))
+            else:
+                await command.get_channel().send(embed=Util.create_simple_embed(f"The joke was too good; it broke the API. code={response.get('code', '???')}", MessageType.FATAL))
+                
+    # if it is a bad response
+    else:
+        await command.get_channel().send(embed=Util.create_simple_embed(f"Unknown error processing request. Code {code}", MessageType.FATAL))
+
 # #####################################
 # Print raw json if needed
 # #####################################

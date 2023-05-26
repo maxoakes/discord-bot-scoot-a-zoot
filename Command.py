@@ -49,7 +49,10 @@ class Command:
                     self.__args[key] = value
         
     def get_part(self, num: int):
-        return self.__base[num]
+        if num < len(self.__base):
+            return self.__base[num]
+        else:
+            return ''
     
     def get_command_from(self, start: int):
         # >>quote add "this is a quote"
