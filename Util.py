@@ -1,5 +1,7 @@
 import datetime
 import threading
+import json
+import aiohttp
 from enum import Enum
 import discord
 
@@ -11,6 +13,12 @@ class MessageType(Enum):
     PLAYLIST_ITEM = 0x007BFF #Blue
     PLAYLIST_ALL = 0x007BFF #Blue
     QUOTE = 0x007BFF #Blue
+
+class ResponseType(Enum):
+    TEXT = 0,
+    JSON = 1,
+    XML = 2,
+    UNKNOWN = 3
 
 class Util:
     AFFIRMATIVE_RESPONSE = ['y', 'ya', 'ye', 'yea', 'yes', 'yeah', 't', 'true']
@@ -24,6 +32,26 @@ class Util:
         embed = discord.Embed(description=text, color=type.value)
         return embed
         
+
+    async def http_get(url: str) -> tuple[dict | str, ResponseType, int]:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url) as response:
+                content_type: str = response.headers.get('content-type')
+                mime = ResponseType.UNKNOWN
+                if content_type.find('application/json') > -1:
+                    mime = ResponseType.JSON
+                if content_type.find('application') > -1 and content_type.find('xml') > -1:
+                    mime = ResponseType.XML
+                if content_type.find('text/') > -1:
+                    mime = ResponseType.TEXT
+                code: int = response.status
+
+                if mime == ResponseType.JSON:
+                    return (await response.json(), mime, code)
+                else:
+                    return (response.text, mime, code)
+                
+
     # #####################################
     # Debug
     # #####################################
@@ -33,6 +61,7 @@ class Util:
         for t in threading.enumerate():
             out = out + f"'{t.name}', "
         print(out)
+
 
     def print_time_diff(loc: str):
         global T
