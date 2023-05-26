@@ -318,9 +318,6 @@ async def command_color(context: commands.Context):
     else:
         await command.get_channel().send(embed=Util.create_simple_embed(f"Unknown error processing request. Code {code}", MessageType.FATAL))
 
-# https://color.serialif.com/
-
-
 # #####################################
 # Print raw json if needed
 # #####################################
