@@ -45,6 +45,11 @@ async def on_ready():
     print("READY!")
 
 
+@bot.add_check
+def check_command_context(context: commands.Context):
+    return context.message.channel.id == default_channels[context.guild.id]
+
+
 # #####################################
 # Commands
 # #####################################
@@ -420,6 +425,9 @@ async def command_joke(context: commands.Context):
     # if it is a bad response
     else:
         await command.get_channel().send(embed=Util.create_simple_embed(f"Unknown error processing request. Code {code}", MessageType.FATAL))
+
+
+# start from https://github.com/public-apis/public-apis#geocoding
 
 # #####################################
 # Print raw json if needed

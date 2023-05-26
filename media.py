@@ -66,6 +66,11 @@ async def on_ready():
     print(f"READY! Initialized for '{this_guild.name}' with default-channel='{default_channel}'")
 
 
+@bot.add_check
+def check_command_context(context: commands.Context):
+    return context.message.channel == default_channel
+
+
 # #####################################
 # Commands
 # #####################################
