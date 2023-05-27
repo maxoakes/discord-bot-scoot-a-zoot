@@ -133,7 +133,7 @@ async def command_minecraft(context: commands.Context):
     command = Command(context.message)
     address = command.get_command_from(1)
     param = 'ftb.ckwgaming.com' if address == '' else address
-    (response, mime, code) = await Util.http_get(f'https://api.mcsrvstat.us/2/{param}')
+    (response, mime, code) = await Util.http_get_thinking(f'https://api.mcsrvstat.us/2/{param}', context)
 
     if (print_debug_if_needed(command, response)):
         return
@@ -188,7 +188,7 @@ async def command_bored(context: commands.Context):
     if command.does_arg_exist('free'):
         options = options + f'minprice=0&maxprice=0'
 
-    (response, mime, code) = await Util.http_get(f'http://www.boredapi.com/api/activity?{options}')
+    (response, mime, code) = await Util.http_get_thinking(f'http://www.boredapi.com/api/activity?{options}', context)
 
     if (print_debug_if_needed(command, response)):
         return
@@ -217,7 +217,7 @@ async def command_bored(context: commands.Context):
 async def command_word(context: commands.Context):
     command = Command(context.message)
     word = command.get_command_from(1)
-    (response, mime, code) = await Util.http_get(f'https://api.dictionaryapi.dev/api/v2/entries/en/{word}')
+    (response, mime, code) = await Util.http_get_thinking(f'https://api.dictionaryapi.dev/api/v2/entries/en/{word}', context)
 
     if (print_debug_if_needed(command, response)):
         return
@@ -269,7 +269,7 @@ async def command_color(context: commands.Context):
         values = (command.get_part(2), command.get_part(4), command.get_part(4))
         query_string = query_string + f'{value_type}={values[0]},{values[1]},{values[2]}'
     # if it is a name for a color
-    elif value_type in ['name']:
+    elif value_type in ['name', 'word', 'keyword']:
         query_string = query_string + f'keyword={command.get_command_from(2)}'
     # if it is a hex or hex alpha
     elif value_type in ['hex']:
@@ -280,7 +280,7 @@ async def command_color(context: commands.Context):
         return
 
     # when everything is all good, make the request
-    (response, mime, code) = await Util.http_get(query_string)
+    (response, mime, code) = await Util.http_get_thinking(query_string, context)
 
     if (print_debug_if_needed(command, response)):
         return
@@ -329,7 +329,7 @@ async def command_color(context: commands.Context):
     description='Generate a buzzword tech phrase')
 async def command_buzz(context: commands.Context):
     command = Command(context.message)
-    (response, mime, code) = await Util.http_get('https://corporatebs-generator.sameerkumar.website/')
+    (response, mime, code) = await Util.http_get_thinking('https://corporatebs-generator.sameerkumar.website/', context)
 
     if (print_debug_if_needed(command, response)):
         return
@@ -349,8 +349,8 @@ async def command_buzz(context: commands.Context):
     description='Generate a random fun-fact. Also supports results in German.')
 async def command_fact(context: commands.Context):
     command = Command(context.message)
-    suffix = '?language=de' if command.does_arg_exist('de') or command.does_arg_exist('germen') or command.does_arg_exist('deutsch') else ''
-    (response, mime, code) = await Util.http_get(f'https://uselessfacts.jsph.pl/api/v2/facts/random{suffix}')
+    suffix = '?language=de' if command.does_arg_exist('de') else ''
+    (response, mime, code) = await Util.http_get_thinking(f'https://uselessfacts.jsph.pl/api/v2/facts/random{suffix}', context)
 
     if (print_debug_if_needed(command, response)):
         return
@@ -400,7 +400,7 @@ async def command_joke(context: commands.Context):
 
     query_string = f'https://v2.jokeapi.dev/joke/{categories_string}?{lang_string}{blacklist_string}{search_string}'
     print(query_string)
-    (response, mime, code) = await Util.http_get(query_string)
+    (response, mime, code) = await Util.http_get_thinking(query_string, context)
 
     if (print_debug_if_needed(command, response)):
         return
@@ -427,7 +427,145 @@ async def command_joke(context: commands.Context):
         await command.get_channel().send(embed=Util.create_simple_embed(f"Unknown error processing request. Code {code}", MessageType.FATAL))
 
 
-# start from https://github.com/public-apis/public-apis#geocoding
+@bot.command(name='geo', hidden=False, aliases=['loc', 'location', 'geography'],
+    brief='Get geographical information from an input',
+    usage='[any location input type]',
+    description='Get geographical information from an input')
+async def command_geo(context: commands.Context):
+    command = Command(context.message)
+    input_string = command.get_command_from(1)
+    if input_string == '':
+        await command.get_channel().send(embed=Util.create_simple_embed(f'Enter any search parameter.', MessageType.NEGATIVE))
+        return
+    
+    (response, mime, code) = await Util.http_get_thinking(f'https://geokeo.com/geocode/v1/search.php?q={input_string}?&api={os.getenv("GEOKEO_TOKEN")}', context)
+    
+    if (print_debug_if_needed(command, response)):
+        return
+    
+    # this API does not return 400 when it is a bad request...
+    if mime == ResponseType.JSON and response.get('status') == 'ok':
+        for result in response.get('results'):
+            geo_class = result.get('class')
+            geo_type = result.get('type')
+            address: dict = result.get('address_components')
+            coords: dict = result.get('geometry').get('location')
+            url = f'https://www.google.com/maps/@{coords.get("lat")},{coords.get("lng")},10.0z'
+            embed = discord.Embed(title='Location Information', url=url, color=MessageType.POSITIVE.value)
+
+            if geo_class:
+                embed.add_field(name='Class', value=geo_class.capitalize())
+            
+            if geo_type:
+                embed.add_field(name='Type', value=geo_type.capitalize())
+
+            if address:
+                address_order = ['name', 'island', 'neighbourhood', 'street', 'subdistrict', 'district', 'city', 'state', 'postcode', 'country']
+                for component in address_order:
+                    value = address.get(component)
+                    if value:
+                        is_inline = len(value) < 20
+                        embed.add_field(name=component.capitalize(), value=address.get(component), inline=is_inline)
+
+            embed.add_field(name='Coordinates', value=f'{round(float(coords.get("lat")), 4)}, {round(float(coords.get("lng")), 4)}', inline=False)
+        await command.get_channel().send(embed=embed)
+
+    elif response.get('status') == 'ZERO_RESULTS':
+        await command.get_channel().send(embed=Util.create_simple_embed(f'No results. Try describing the location differently.', MessageType.NEGATIVE))
+
+    # if it is a bad response
+    else:
+        await command.get_channel().send(embed=Util.create_simple_embed(f'Unknown error processing request. Status code {code}', MessageType.FATAL))
+
+
+@bot.command(name='ip', hidden=False,
+    brief='Get (possibly) correct location statistics from an IPv4 address',
+    usage='[IPv4 address]',
+    description='Get (possibly) correct location statistics from an IPv4 address')
+async def command_ip(context: commands.Context):
+    command = Command(context.message)
+    ip = command.get_command_from(1)
+    if ip == '':
+         await command.get_channel().send(embed=Util.create_simple_embed(f'Enter an IPv4 address as a parameter.', MessageType.NEGATIVE))
+         return
+    
+    (response, mime, code) = await Util.http_get_thinking(f'https://api.techniknews.net/ipgeo/{ip}', context)
+    
+    if (print_debug_if_needed(command, response)):
+        return
+    
+    # this API does not return 400 when it is a bad request...
+    if mime == ResponseType.JSON and response.get('status') == 'success':
+        confirmed_ip = response.get('ip')
+        country = response.get('country')
+        region = response.get('regionName')
+        city = response.get('city')
+        zip = response.get('zip')
+        latt = response.get('lat')
+        long = response.get('lon')
+        timezone = response.get('timezone')
+        isp = response.get('isp')
+        org = response.get('org')
+        a_system = response.get('as')
+        is_proxy = response.get('proxy')
+        is_mobile = response.get('mobile')
+        is_cached = response.get('cached')
+
+        url = f'https://www.google.com/maps/@{latt},{long},10.0z' if latt and long else None
+        embed = discord.Embed(title='IPv4 Geolocation Lookup Result', url=url, color=MessageType.POSITIVE.value)
+
+        name_values = [('IP', confirmed_ip), 
+            ('City', city), ('Region', region), ("Postal Code", zip), ('Country', country), ('Timezone', timezone),
+            ('Service Provider', isp), ('Organization', org), ('Autonomous System', a_system),
+            ('Proxy', is_proxy), ('Mobile', is_mobile), ('Cached Result', is_cached), 
+            ('Coordinates', f'{round(float(latt), 4)}, {round(float(long), 4)}')]
+        for pairing in name_values:
+            if pairing[1] != None:
+                value_string = str(pairing[1])
+                is_inline = len(value_string) < 20
+                embed.add_field(name=pairing[0], value=value_string, inline=is_inline)
+
+        embed.set_footer(text='Accuracy of IP geolocation lookup may vary per service that is used. This result may not be correct, for some addresses.')
+        await command.get_channel().send(embed=embed)
+
+    # if it is a bad response
+    else:
+        await command.get_channel().send(embed=Util.create_simple_embed(f'Unknown error processing request. Not a valid IPv4 address? Status {response.get("status")}', MessageType.FATAL))
+
+
+@bot.command(name='math', hidden=False,
+    brief='Do some math',
+    usage='[simplify|factor|derive|integrate|zeroes|tangent|cos|sin|tan|arccos|arcsin|arc|tan|abs|log] [expression]',
+    description='Do some math')
+async def command_math(context: commands.Context):
+    command = Command(context.message)
+    operation = None
+    if command.get_part(1) in ['simplify', 'factor', 'derive', 'integrate', 'zeroes', 'tangent', 'area', 'cos', 'sin', 'tan', 'arccos', 'arcsin', 'arctan', 'abs', 'log']:
+        operation = command.get_part(1)
+    expression = command.get_command_from(2)
+    expression = expression.replace('/','(over)').replace('log','l')
+
+    if operation == None or expression == '':
+        await command.get_channel().send(embed=Util.create_simple_embed(f'Enter a valid operation and expression.', MessageType.NEGATIVE))
+        return
+    
+    (response, mime, code) = await Util.http_get_thinking(f'https://newton.now.sh/api/v2/{operation}/{expression}', context)
+    
+    if (print_debug_if_needed(command, response)):
+        return
+    
+    # this API does not return 400 when it is a bad request...
+    if mime == ResponseType.JSON and code == 200:
+        result = response.get('result')
+        confirmed_expression = response.get('expression')
+        await command.get_channel().send(f'**{operation.capitalize()}: {confirmed_expression}**```{result}```')
+
+    # if it is a bad response
+    else:
+        await command.get_channel().send(embed=Util.create_simple_embed(f'Unknown error processing request. Is it a valid request? Code {code}', MessageType.FATAL))
+
+
+# start from https://github.com/public-apis/public-apis#science--math
 
 # #####################################
 # Print raw json if needed

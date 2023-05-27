@@ -4,6 +4,7 @@ import json
 import aiohttp
 from enum import Enum
 import discord
+from discord.ext import commands
 
 class MessageType(Enum):
     FATAL = 0xDC3545 #Red
@@ -32,6 +33,9 @@ class Util:
         embed = discord.Embed(description=text, color=type.value)
         return embed
         
+    async def http_get_thinking(url: str, context: commands.Context) -> tuple[dict | str, ResponseType, int]:
+        async with context.channel.typing():
+            return await Util.http_get(url)
 
     async def http_get(url: str) -> tuple[dict | str, ResponseType, int]:
         async with aiohttp.ClientSession() as session:
@@ -50,7 +54,7 @@ class Util:
                     return (await response.json(), mime, code)
                 else:
                     return (response.text, mime, code)
-                
+            
 
     # #####################################
     # Debug
