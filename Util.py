@@ -38,6 +38,7 @@ class Util:
             return await Util.http_get(url)
 
     async def http_get(url: str) -> tuple[dict | str, ResponseType, int]:
+        print(url)
         async with aiohttp.ClientSession() as session:
             async with session.get(url) as response:
                 content_type: str = response.headers.get('content-type')
@@ -54,7 +55,43 @@ class Util:
                     return (await response.json(), mime, code)
                 else:
                     return (response.text, mime, code)
-            
+
+    def build_embed_fields(embed: discord.Embed, name_values: list[tuple[str, object, bool | None]]) -> None:
+        for pairing in name_values:
+            # if there is no value given for a field, there was likely not one received in the first place, so skip it
+            value_nonexistent = pairing[1] == None or pairing[1] == ''
+
+            if not value_nonexistent:
+                title = str(pairing[0])
+                value = str(pairing[1])
+                inline_override = pairing[2] if len(pairing) == 3 else None
+                
+                # check if the field is narrow enough to avoid making a newline
+                inline_available = len(title) < 20 and len(value) < 25
+                is_inline = inline_override if inline_override != None else inline_available
+                
+                # return
+                embed.add_field(name=title, value=value, inline=is_inline)
+
+
+    def deg_to_compass(num: int) -> str:
+        val = int((num/22.5)+.5)
+        arr = ["N","NNE","NE","ENE","E","ESE","SE","SSE","S","SSW","SW","WSW","W","WNW","NW","NNW"]
+        return arr[(val % 16)]
+    
+    
+    # good or success
+    def is_200(code: int) -> bool:
+        return code >= 100 and code < 300
+    
+
+    def is_400(code: int) -> bool:
+        return code >= 400 and code < 500
+    
+    
+    def is_500(code: int) -> bool:
+        return code >= 500 and code < 600
+    
 
     # #####################################
     # Debug

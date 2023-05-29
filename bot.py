@@ -210,7 +210,7 @@ async def command_bored(context: commands.Context):
         await command.get_channel().send(embed=Util.create_simple_embed(f"Unknown error processing request. Code {code}", MessageType.FATAL))
 
 
-@bot.command(name='word', hidden=False, aliases=['w', 'dict', 'dictionary', 'def', 'define'],
+@bot.command(name='word', hidden=False, aliases=['dict', 'dictionary', 'def', 'define'],
     brief='Get the definition(s) of a word', 
     usage='[word]',
     description='Get the definition(s) of a word')
@@ -565,7 +565,159 @@ async def command_math(context: commands.Context):
         await command.get_channel().send(embed=Util.create_simple_embed(f'Unknown error processing request. Is it a valid request? Code {code}', MessageType.FATAL))
 
 
-# start from https://github.com/public-apis/public-apis#science--math
+# https://docs.aviationapi.com/#tag/airports
+@bot.command(name='airport', hidden=False, aliases=['ap', 'av'],
+    brief='Get basic airport statistics given a code',
+    usage='[list of ICAO or FAA identifiers separated by spaces]',
+    description='Get basic airport statistics given a code')
+async def command_airport(context: commands.Context):
+    command = Command(context.message)
+    param = command.get_command_from(1).replace(', ',',').replace(' ',',')
+    if param == '':
+        await command.get_channel().send(embed=Util.create_simple_embed(f'Not a valid input. Consult `>>help airport` for help.', MessageType.NEGATIVE))
+        return
+
+    (response, mime, code) = await Util.http_get_thinking(f'https://api.aviationapi.com/v1/airports?apt={param}', context)
+    
+    if (print_debug_if_needed(command, response)):
+        return
+    
+    # this API does not return 400 when it is a bad request...
+    if Util.is_200(code):
+        for (key, entry) in list(response.items()):
+            if len(entry) == 0:
+                await command.get_channel().send(embed=Util.create_simple_embed(f'Could not find anything given the ID `{key}`. Note this command is for US airfields only.', MessageType.NEGATIVE))
+                continue
+            info: dict = entry[0]
+            name = info.get('facility_name', 'Unknown Name')
+            airport_type = info.get('type', 'Unknown Type')
+            title = f'{name} ({airport_type})'
+            embed = discord.Embed(title=title, color=MessageType.POSITIVE.value)
+
+            name_values = [
+                ('NOTAM Identity', info.get('notam_facility_ident')),
+                ('City', info.get('city')), 
+                ('County', info.get('county')), 
+                ('State', info.get('state')), 
+                ('Region', info.get('region')), 
+                ('Ownership', info.get('ownership')), 
+                ('Elevation', info.get('elevation')),
+                ('Magnetic Variation', info.get('magnetic_variation')), 
+                ('VFR Sectional', info.get('vfr_sectional')), 
+                ('Responsible ARTCC', info.get('responsible_artcc_name')), 
+                ('Lighting Schedule', info.get('lighting_schedule')), 
+                ('Beacon Schedule', info.get('beacon_schedule')),
+                ('Military Landing Available', info.get('military_landing')),
+                ('Military Joint Use', info.get('military_joint_use')),
+                ('Control Tower', info.get('control_tower')),
+                ('UNICOM', info.get('unicom')),
+                ('CTAF', info.get('ctaf')),
+                ('Latitude', info.get('latitude')), 
+                ('Longitude', info.get('longitude')),
+                ('Info Last Updated', info.get('effective_date'))
+            ]
+
+            Util.build_embed_fields(embed, name_values)
+            await command.get_channel().send(embed=embed)
+
+    elif Util.is_400(code):
+        await command.get_channel().send(embed=Util.create_simple_embed(f'No valid response. Perhaps the airport could not be found. ({code})', MessageType.NEGATIVE))
+        
+    else: # server error 500 or something else unknown
+        await command.get_channel().send(embed=Util.create_simple_embed(f'Something went wrong while getting a response. ({code})', MessageType.FATAL))
+
+
+# https://openweathermap.org/current
+@bot.command(name='weather', hidden=False, aliases=['w'],
+    brief='Get the current weather for a location',
+    usage='(zip [ZIP code] [country abbr]) OR (city [city] (state abbr) [country abbr])',
+    description='Get the current weather for a location')
+async def command_weather(context: commands.Context):
+    command = Command(context.message)
+    param = command.get_command_from(2).replace(', ',',').replace(' ',',')
+    method = command.get_part(1).lower()
+    if not method in ['zip', 'city']:
+        await command.get_channel().send(embed=Util.create_simple_embed(f'Not valid syntax. See `>>help weather`.', MessageType.NEGATIVE))
+        return
+
+    search_query = 'q=' if method == 'city' else 'zip='
+    search_query = search_query + param
+    (response, mime, code) = await Util.http_get_thinking(f'https://api.openweathermap.org/data/2.5/weather?{search_query}&units=imperial&appid={os.getenv("OPENWEATHER_TOKEN")}', context)
+    
+    if (print_debug_if_needed(command, response)):
+        return
+    
+    if Util.is_200(code):
+        location = f'{response.get("name", "Unknown")}, {response.get("sys", {}).get("country", "Unknown")}'
+        url = None
+        coordinates = response.get('coord', {})
+        if coordinates:
+            url = f'https://www.ventusky.com/?p={coordinates.get("lat")};{coordinates.get("lon")};7&l=temperature-2m'
+
+        embed = discord.Embed(title=f'Current Weather for {location}', url=url, color=MessageType.POSITIVE.value)
+
+        # get the appropriate icon, given by the API response
+        # See https://openweathermap.org/weather-conditions
+        name_values = []
+        weather_comp = response.get('weather', [{}])[0]
+        if weather_comp:
+            name_values.append(('Description', weather_comp.get('description', 'Unknown').capitalize(), False))
+            embed.set_thumbnail(url=f'https://openweathermap.org/img/wn/{weather_comp.get("icon", "01d")}@2x.png')
+
+        # get temperature stats
+        temperature_suffix = ' °F'
+        main_comp = response.get('main', {})
+        if main_comp:
+            name_values.append(('Temperature', f'{main_comp.get("temp")}{temperature_suffix}'))
+            name_values.append(('Feels Like', f'{main_comp.get("feels_like")}{temperature_suffix}'))
+            name_values.append(('Low', f'{main_comp.get("temp_min")}{temperature_suffix}'))
+            name_values.append(('High', f'{main_comp.get("temp_max")}{temperature_suffix}'))
+            name_values.append(('Pressure', f'{main_comp.get("pressure")} mb'))
+            name_values.append(('Humidity', f'{main_comp.get("humidity")}%'))
+
+        # get visibility
+        visibility = response.get('visibility')
+        if visibility != None:
+            visibility = f'{visibility}m' if visibility < 10000 else 'Greater than 10km'
+        name_values.append(('Visibility', visibility))
+
+        # get wind conditions
+        wind = response.get('wind', {})
+        if wind:
+            speed = wind.get('speed', '?')
+            dir = wind.get('deg', '?')
+            gust = wind.get('gust')
+            wind_string = f'{Util.deg_to_compass(dir)} @ {speed} mph '
+            if gust: # do not append a gust mention if there is 0 gust, or if the field does not exist
+                wind_string = wind_string + f' with gusts of {gust} mph'
+            name_values.append(('Winds', wind_string))
+
+        clouds = response.get('clouds', {}).get('all')
+        if clouds != None:
+            name_values.append(('Cloud Coverage', f'{clouds}%', False))
+        
+        # get the sunrise/sunset times
+        system_comp = response.get('sys', {})
+        if system_comp:
+            time_format = '%I:%M:%S %p'
+            sunrise = system_comp.get('sunrise', 0) + response.get('timezone', 0)
+            name_values.append(('Sunrise', datetime.datetime.utcfromtimestamp(sunrise).strftime(time_format), True))
+            sunset = system_comp.get('sunset', 0) + response.get('timezone', 0)
+            name_values.append(('Sunset', datetime.datetime.utcfromtimestamp(sunset).strftime(time_format), True))
+
+        Util.build_embed_fields(embed, name_values)
+        await command.get_channel().send(embed=embed)
+
+    elif Util.is_400(code):
+        await command.get_channel().send(embed=Util.create_simple_embed(f'No valid response. Perhaps the input location could not be found. ({code})', MessageType.NEGATIVE))
+        
+    else: # server error 500 or something else unknown
+        await command.get_channel().send(embed=Util.create_simple_embed(f'Something went wrong while getting a response. ({code})', MessageType.FATAL))
+
+
+# TODO
+# subscriptions, dispatch forever loop to watch for new API returns
+# https://earthquake.usgs.gov/fdsnws/event/1/
 
 # #####################################
 # Print raw json if needed
