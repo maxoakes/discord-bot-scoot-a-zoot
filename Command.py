@@ -64,8 +64,8 @@ class Command:
     def get_all_args(self):
         return self.__args
 
-    def get_arg(self, key: str):
-        return self.__args.get(key)
+    def get_arg(self, key: str, default=None):
+        return self.__args.get(key, default)
     
     def does_arg_exist(self, key: str) -> bool:
         return key in list(self.__args.keys())

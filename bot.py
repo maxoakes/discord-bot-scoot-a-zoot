@@ -138,8 +138,7 @@ async def command_minecraft(context: commands.Context):
     if (print_debug_if_needed(command, response)):
         return
     
-    # if the response is a json (likely a 200 response)
-    if mime == ResponseType.JSON and code == 200:
+    if Util.is_200(code):
         # required elements
         full_address = f"{response.get('ip', '?.?.?.?')}:{response.get('port', '?????')}"
         is_online = response.get('online', False)
@@ -169,22 +168,26 @@ async def command_minecraft(context: commands.Context):
             
         await command.get_channel().send(embed=embed)
 
-    # if it is a bad response
-    else:
-        await command.get_channel().send(Util.create_simple_embed(f"Unknown error processing request. Code {code}", MessageType.FATAL))
+    elif Util.is_400(code):
+        await command.get_channel().send(embed=Util.create_simple_embed(f'No valid response. Perhaps the expression could not be parsed. ({code})', MessageType.NEGATIVE))
+        
+    else: # server error 500 or something else unknown
+        await command.get_channel().send(embed=Util.create_simple_embed(f'Something went wrong while getting a response. ({code})', MessageType.FATAL))
 
 
 @bot.command(name='bored', hidden=False, 
     brief='Get a suggestion for something to do', 
-    usage='(--type=["education|recreational|social|diy|charity|cooking|relaxation|music|busywork]) (--participants=[number] (--free)',
+    usage='(--type=[education|recreational|social|diy|charity|cooking|relaxation|music|busywork]) (--participants=[number] (--free)',
     description='Get a suggestion for something to do')
 async def command_bored(context: commands.Context):
     command = Command(context.message)
     options = ''
-    if command.get_arg('type'):
+    requested_type = command.get_arg('type')
+    participants = command.get_arg('participants')
+    if requested_type in ['education','recreational','social','diy','charity','cooking','relaxation','music','busywork']:
         options = options + f'type={command.get_arg("type")}&'
-    if command.get_arg('participants'):
-        options = options + f'participants={command.get_arg("type")}&'
+    if participants:
+        options = options + f'participants={int(command.get_arg("participants"))}&'
     if command.does_arg_exist('free'):
         options = options + f'minprice=0&maxprice=0'
 
@@ -194,22 +197,24 @@ async def command_bored(context: commands.Context):
         return
     
     # if the response is a json (likely a 200 response)
-    if mime == ResponseType.JSON and code == 200:
-
-        # craft the embed
+    if Util.is_200(code):
         embed = discord.Embed(title="Activity", color=MessageType.POSITIVE.value)
-        embed.add_field(name='What to do', value=response.get('activity', 'Do something fun'), inline=False)
-        embed.add_field(name='Type', value=response.get('type', 'Unknown').capitalize())
-        embed.add_field(name='Participants', value=response.get('participants', 'At least one'))
-        is_free = "Yes!" if response.get('price', 1) == 0 else "No"
-        embed.add_field(name='Is it free?', value=is_free)
+        fields = [
+            ('What to do', response.get('activity', 'Do something fun'), False),
+            ('Type', response.get('type', 'Unknown').capitalize()),
+            ('Participants', response.get('participants', 'At least one')),
+            ('Is it free?', "Yes!" if response.get('price', 1) == 0 else "No")]
+        Util.build_embed_fields(embed, fields)
         await command.get_channel().send(embed=embed)
 
-    # if it is a bad response
-    else:
-        await command.get_channel().send(embed=Util.create_simple_embed(f"Unknown error processing request. Code {code}", MessageType.FATAL))
+    elif Util.is_400(code):
+        await command.get_channel().send(embed=Util.create_simple_embed(f'Something went wrong getting a response and it is your fault. ({code})', MessageType.NEGATIVE))
+        
+    else: # server error 500 or something else unknown
+        await command.get_channel().send(embed=Util.create_simple_embed(f'Something went wrong while getting a response. If you are bored, help debug the issue. ({code})', MessageType.FATAL))
 
 
+# https://dictionaryapi.dev/
 @bot.command(name='word', hidden=False, aliases=['dict', 'dictionary', 'def', 'define'],
     brief='Get the definition(s) of a word', 
     usage='[word]',
@@ -222,41 +227,45 @@ async def command_word(context: commands.Context):
     if (print_debug_if_needed(command, response)):
         return
     
-    # if the response is a json (likely a 200 response)
-    if mime == ResponseType.JSON and code == 200:
+    if Util.is_200(code):
         for usage in response:
             # get the word
             if not usage.get('word'):
                 continue
             this_word = usage.get('word').capitalize()
 
-            # for each meaning, get each definition
+            # for each meaning, get each definition. Each meaning will have its own embed
             for meaning in usage.get('meanings', []):
                 part = meaning.get('partOfSpeech')
                 embed = discord.Embed(title=f'{this_word} ({part})', url=usage.get('sourceUrls', [None])[0], color=MessageType.POSITIVE.value)
                 embed.add_field(name='Phonetics', value=usage.get('phonetic'), inline=False)
+
+                # for each definition, add a field in the embed
                 i = 0
                 for i, definition in enumerate(meaning.get('definitions')):
                     name = f'{i+1}. Definition'
                     d = definition.get('definition')
                     e = definition.get('example')
-                    value = ''
-                    if e:
-                        value = value + f'{d}\n - Example: *{e}*\n'
-                    else:
-                        value = value + f'{d}'
+
+                    # the value will be the definition, and additionally an example, if one is provided
+                    value = f'{d}\n - Example: *{e}*\n' if e else f'{d}'
+
                     embed.add_field(name=name, value=value, inline=False)
                 embed.add_field(name='Source', value=usage.get('sourceUrls', ['None available'])[0], inline=False)
                 await command.get_channel().send(embed=embed)
 
-    # if it is a bad response
-    else:
-        await command.get_channel().send(embed=Util.create_simple_embed(f"Unknown error processing request. Is that a word? Code {code}", MessageType.FATAL))
+    elif Util.is_400(code):
+        await command.get_channel().send(embed=Util.create_simple_embed(f'No valid response. Perhaps the expression could not be parsed. ({code})', MessageType.NEGATIVE))
+        
+    else: # server error 500 or something else unknown
+        await command.get_channel().send(embed=Util.create_simple_embed(f'Something went wrong while getting a response. ({code})', MessageType.FATAL))
 
 
+# https://color.serialif.com/#anchor-request
+# note: not using alpha channel ability with this API because the response is not consistent with non-alpha color response
 @bot.command(name='color', hidden=False,
     brief='Enter a color for its RGB, HSL, hex values and closest name', 
-    usage='(name [name of color]) OR (hex [hexidecimal value]) OR ([rgb] [0..255] [0..255] [0..255]) OR (hsl [0..255] [0..100] [0..100])',
+    usage='(name [name of color]) OR (hex [hexidecimal value]) OR (rgb [0..255] [0..255] [0..255]) OR (hsl [0..255] [0..100] [0..100])',
     description='Enter a color for its RGB, HSL, hex values and closest name')
 async def command_color(context: commands.Context):
     command = Command(context.message)
@@ -266,7 +275,7 @@ async def command_color(context: commands.Context):
     # parse command for color components
     # if it is a color code of ints
     if value_type in ['rgb', 'hsl', 'hsl']:
-        values = (command.get_part(2), command.get_part(4), command.get_part(4))
+        values = (command.get_part(2), command.get_part(3), command.get_part(4))
         query_string = query_string + f'{value_type}={values[0]},{values[1]},{values[2]}'
     # if it is a name for a color
     elif value_type in ['name', 'word', 'keyword']:
@@ -281,21 +290,24 @@ async def command_color(context: commands.Context):
 
     # when everything is all good, make the request
     (response, mime, code) = await Util.http_get_thinking(query_string, context)
+    status = response.get('status')
 
     if (print_debug_if_needed(command, response)):
         return
     
     # this API does not return 400 when it is a bad request...
-    if mime == ResponseType.JSON and response.get('status') == 'success':
-        base_keyword = response.get('base').get('keyword').capitalize()
-        base_rgb = response.get('base').get('rgb').get('value')
-        base_hsl = response.get('base').get('hsl').get('value')
-        base_hex = response.get('base').get('hex').get('value')
+    if status == 'success':
+        # create the embed describing the requested color
+        base_keyword = response.get('base', {}).get('keyword', '').capitalize()
+        base_rgb = response.get('base', {}).get('rgb', {}).get('value')
+        base_hsl = response.get('base', {}).get('hsl', {}).get('value')
+        base_hex = response.get('base', {}).get('hex', {}).get('value')
 
         base_value = int(f'0x{base_hex[1:]}', 16)
         base_title_available = base_keyword != ''
         base_title = base_keyword if base_title_available else base_rgb
         base_embed = discord.Embed(title=f'Requested: {base_title}', color=base_value)
+
         if base_title_available:
             base_embed.add_field(name='Closest Name', value=base_keyword, inline=False)
         base_embed.add_field(name='Red, Blue, Green', value=base_rgb, inline=False)
@@ -303,15 +315,17 @@ async def command_color(context: commands.Context):
         base_embed.add_field(name='Hexidecimal', value=base_hex, inline=False)
         await command.get_channel().send(embed=base_embed)
 
-        comp_keyword = response.get('complementary').get('keyword').capitalize()
-        comp_rgb = response.get('complementary').get('rgb').get('value')
-        comp_hsl = response.get('complementary').get('hsl').get('value')
-        comp_hex = response.get('complementary').get('hex').get('value')
+        # create an embed for the complementary color
+        comp_keyword = response.get('complementary', {}).get('keyword', '').capitalize()
+        comp_rgb = response.get('complementary', {}).get('rgb', {}).get('value')
+        comp_hsl = response.get('complementary', {}).get('hsl', {}).get('value')
+        comp_hex = response.get('complementary', {}).get('hex', {}).get('value')
 
         comp_value = int(f'0x{comp_hex[1:]}', 16)
         comp_title_available = comp_keyword != ''
         comp_title = comp_keyword if comp_title_available else comp_rgb
         comp_embed = discord.Embed(title=f'Complementary: {comp_title}', color=comp_value)
+
         if comp_title_available:
             comp_embed.add_field(name='Closest Name', value=comp_keyword, inline=False)
         comp_embed.add_field(name='Red, Blue, Green', value=comp_rgb, inline=False)
@@ -319,11 +333,13 @@ async def command_color(context: commands.Context):
         comp_embed.add_field(name='Hexidecimal', value=comp_hex, inline=False)
         await command.get_channel().send(embed=comp_embed)
 
-    # if it is a bad response
+    elif status == 'error':
+        await command.get_channel().send(embed=Util.create_simple_embed(f"Got an error response. Perhaps it was not a valid color. Message: {response.get('error', {}).get('message')}", MessageType.NEGATIVE))
     else:
-        await command.get_channel().send(embed=Util.create_simple_embed(f"Unknown error processing request. Code {code}", MessageType.FATAL))
+        await command.get_channel().send(embed=Util.create_simple_embed(f"Unknown error. Is the endpoint server down? ({code}): {response}", MessageType.FATAL))
 
 
+# https://corporatebs-generator.sameerkumar.website/
 @bot.command(name='buzz', hidden=False,
     brief='Generate a buzzword tech phrase',
     description='Generate a buzzword tech phrase')
@@ -335,14 +351,18 @@ async def command_buzz(context: commands.Context):
         return
     
     # this API does not return 400 when it is a bad request...
-    if mime == ResponseType.JSON and code == 200:
+    if Util.is_200(code):
         phrase = response.get('phrase')
         await command.get_channel().send(f'I present... **{phrase}**')
-    # if it is a bad response
-    else:
-        await command.get_channel().send(embed=Util.create_simple_embed(f"Unknown error processing request. Code {code}", MessageType.FATAL))
+
+    elif Util.is_400(code):
+        await command.get_channel().send(embed=Util.create_simple_embed(f'No valid response and it is your fault. ({code})', MessageType.NEGATIVE))
+        
+    else: # server error 500 or something else unknown
+        await command.get_channel().send(embed=Util.create_simple_embed(f'Something went wrong while getting a response. ({code})', MessageType.FATAL))
 
 
+# https://uselessfacts.jsph.pl/
 @bot.command(name='fact', hidden=False,
     brief='Generate a random fun-fact',
     usage='(--de)',
@@ -355,15 +375,18 @@ async def command_fact(context: commands.Context):
     if (print_debug_if_needed(command, response)):
         return
     
-    # this API does not return 400 when it is a bad request...
-    if mime == ResponseType.JSON and code == 200:
-        fact = response.get('text')
+    if Util.is_200(code):
+        fact = response.get('text', 'This API is broken')
         await command.get_channel().send(f'**Fun Fact:** {fact}')
-    # if it is a bad response
-    else:
-        await command.get_channel().send(embed=Util.create_simple_embed(f"Unknown error processing request. Code {code}", MessageType.FATAL))
+
+    elif Util.is_400(code):
+        await command.get_channel().send(embed=Util.create_simple_embed(f'No valid response and it is your fault. ({code})', MessageType.NEGATIVE))
+        
+    else: # server error 500 or something else unknown
+        await command.get_channel().send(embed=Util.create_simple_embed(f'Something went wrong while getting a response. ({code})', MessageType.FATAL))
 
 
+# https://v2.jokeapi.dev/
 @bot.command(name='joke', hidden=False,
     brief='Get a joke',
     usage='[programming|dark|pun|spooky|christmas] (--nsfw) (--religious) (--political) (--racist) (--sexist) (--explicit) (--search=[string]) (--lang=[en|es|de|fr|cs|pt])',
@@ -375,7 +398,8 @@ async def command_joke(context: commands.Context):
     categories = []
     i = 1
     while command.get_part(i) != '':
-        categories.append(command.get_part(i))
+        if command.get_part(i) in ['programming', 'dark', 'pun', 'spooky', 'christmas']:
+            categories.append(command.get_part(i))
         i = i + 1
     if len(categories) == 0:
         categories = ['Any']
@@ -390,23 +414,23 @@ async def command_joke(context: commands.Context):
 
     # get the language parameter
     lang_string = ''
-    if command.get_arg('lang') in ['en', 'es', 'de', 'fr', 'cs', 'pt']:
-        lang_string = f'lang={command.get_arg("lang")}&'
+    input_lang = command.get_arg('lang')
+    if input_lang in ['en', 'es', 'de', 'fr', 'cs', 'pt']:
+        lang_string = f'lang={input_lang}&'
 
     # get any string to search
     search_string = ''
-    if command.get_arg('search'):
-        lang_string = f'contains={command.get_arg("search")}&'
+    input_search = command.get_arg('search')
+    if input_search:
+        search_string = f'contains={input_search}&'
 
     query_string = f'https://v2.jokeapi.dev/joke/{categories_string}?{lang_string}{blacklist_string}{search_string}'
-    print(query_string)
     (response, mime, code) = await Util.http_get_thinking(query_string, context)
 
     if (print_debug_if_needed(command, response)):
         return
     
-    # this API does not return 400 when it is a bad request...
-    if mime == ResponseType.JSON and code == 200:
+    if Util.is_200(code):
         preface = 'Here is a joke:\n'
         joke_type = response.get('type')
         if joke_type == 'single':
@@ -422,60 +446,58 @@ async def command_joke(context: commands.Context):
             else:
                 await command.get_channel().send(embed=Util.create_simple_embed(f"The joke was too good; it broke the API. code={response.get('code', '???')}", MessageType.FATAL))
                 
-    # if it is a bad response
-    else:
-        await command.get_channel().send(embed=Util.create_simple_embed(f"Unknown error processing request. Code {code}", MessageType.FATAL))
+    elif Util.is_400(code):
+        await command.get_channel().send(embed=Util.create_simple_embed(f'No valid response and it is your fault. ({code})', MessageType.NEGATIVE))
+        
+    else: # server error 500 or something else unknown
+        await command.get_channel().send(embed=Util.create_simple_embed(f'Something went wrong while getting a response. ({code})', MessageType.FATAL))
 
 
+# https://geokeo.com/
 @bot.command(name='geo', hidden=False, aliases=['loc', 'location', 'geography'],
     brief='Get geographical information from an input',
-    usage='[any location input type]',
+    usage='[any location input type] (--limit=[number])',
     description='Get geographical information from an input')
 async def command_geo(context: commands.Context):
     command = Command(context.message)
     input_string = command.get_command_from(1)
+    result_limit = int(command.get_arg('limit', default=3))
     if input_string == '':
         await command.get_channel().send(embed=Util.create_simple_embed(f'Enter any search parameter.', MessageType.NEGATIVE))
         return
     
     (response, mime, code) = await Util.http_get_thinking(f'https://geokeo.com/geocode/v1/search.php?q={input_string}?&api={os.getenv("GEOKEO_TOKEN")}', context)
-    
+    status = response.get('status', 'ok')
+
     if (print_debug_if_needed(command, response)):
         return
     
-    # this API does not return 400 when it is a bad request...
-    if mime == ResponseType.JSON and response.get('status') == 'ok':
-        for result in response.get('results'):
-            geo_class = result.get('class')
-            geo_type = result.get('type')
-            address: dict = result.get('address_components')
+    # this API only returns 200 code...
+    if status == 'ok':
+        for result in response.get('results', [])[:result_limit]:
+            geo_class = result.get('class', 'Location').capitalize()
+            geo_type = result.get('type', '').capitalize()
+            address: dict = result.get('address_components', {})
             coords: dict = result.get('geometry').get('location')
             url = f'https://www.google.com/maps/@{coords.get("lat")},{coords.get("lng")},10.0z'
-            embed = discord.Embed(title='Location Information', url=url, color=MessageType.POSITIVE.value)
+            embed = discord.Embed(title=f'{geo_class} Information', url=url, color=MessageType.POSITIVE.value)
 
-            if geo_class:
-                embed.add_field(name='Class', value=geo_class.capitalize())
-            
-            if geo_type:
-                embed.add_field(name='Type', value=geo_type.capitalize())
+            name_values = [('Class', geo_class), ('Type', geo_type)]
+            address_order = ['name', 'island', 'neighbourhood', 'street', 'subdistrict', 'district', 'city', 'state', 'postcode', 'country']
+            for component in address_order:
+                value = address.get(component)
+                if value:
+                    name_values.append((component.capitalize(), address.get(component)))
 
-            if address:
-                address_order = ['name', 'island', 'neighbourhood', 'street', 'subdistrict', 'district', 'city', 'state', 'postcode', 'country']
-                for component in address_order:
-                    value = address.get(component)
-                    if value:
-                        is_inline = len(value) < 20
-                        embed.add_field(name=component.capitalize(), value=address.get(component), inline=is_inline)
-
+            Util.build_embed_fields(embed, name_values)
             embed.add_field(name='Coordinates', value=f'{round(float(coords.get("lat")), 4)}, {round(float(coords.get("lng")), 4)}', inline=False)
-        await command.get_channel().send(embed=embed)
+            await command.get_channel().send(embed=embed)
 
-    elif response.get('status') == 'ZERO_RESULTS':
+    elif status == 'ZERO_RESULTS':
         await command.get_channel().send(embed=Util.create_simple_embed(f'No results. Try describing the location differently.', MessageType.NEGATIVE))
 
-    # if it is a bad response
     else:
-        await command.get_channel().send(embed=Util.create_simple_embed(f'Unknown error processing request. Status code {code}', MessageType.FATAL))
+        await command.get_channel().send(embed=Util.create_simple_embed(f'Unknown error processing request. Status: ({status})', MessageType.FATAL))
 
 
 @bot.command(name='ip', hidden=False,
@@ -490,49 +512,45 @@ async def command_ip(context: commands.Context):
          return
     
     (response, mime, code) = await Util.http_get_thinking(f'https://api.techniknews.net/ipgeo/{ip}', context)
-    
+    status = response.get('status', 'success')
     if (print_debug_if_needed(command, response)):
         return
     
-    # this API does not return 400 when it is a bad request...
-    if mime == ResponseType.JSON and response.get('status') == 'success':
-        confirmed_ip = response.get('ip')
-        country = response.get('country')
-        region = response.get('regionName')
-        city = response.get('city')
-        zip = response.get('zip')
+    # this API only returns 200 code...
+    if status == 'success':
         latt = response.get('lat')
         long = response.get('lon')
-        timezone = response.get('timezone')
-        isp = response.get('isp')
-        org = response.get('org')
-        a_system = response.get('as')
-        is_proxy = response.get('proxy')
-        is_mobile = response.get('mobile')
-        is_cached = response.get('cached')
 
         url = f'https://www.google.com/maps/@{latt},{long},10.0z' if latt and long else None
         embed = discord.Embed(title='IPv4 Geolocation Lookup Result', url=url, color=MessageType.POSITIVE.value)
 
-        name_values = [('IP', confirmed_ip), 
-            ('City', city), ('Region', region), ("Postal Code", zip), ('Country', country), ('Timezone', timezone),
-            ('Service Provider', isp), ('Organization', org), ('Autonomous System', a_system),
-            ('Proxy', is_proxy), ('Mobile', is_mobile), ('Cached Result', is_cached), 
+        name_values = [
+            ('IP', response.get('ip')), 
+            ('City', response.get('city')), 
+            ('Region', response.get('regionName')), 
+            ("Postal Code", response.get('zip')), 
+            ('Country', response.get('country')), 
+            ('Timezone', response.get('timezone')),
+            ('Service Provider', response.get('isp')), 
+            ('Organization', response.get('org')), 
+            ('Autonomous System', response.get('as')),
+            ('Proxy', response.get('proxy')), 
+            ('Mobile', response.get('mobile')), 
+            ('Cached Result', response.get('cached')), 
             ('Coordinates', f'{round(float(latt), 4)}, {round(float(long), 4)}')]
-        for pairing in name_values:
-            if pairing[1] != None:
-                value_string = str(pairing[1])
-                is_inline = len(value_string) < 20
-                embed.add_field(name=pairing[0], value=value_string, inline=is_inline)
+        Util.build_embed_fields(embed, name_values)
 
-        embed.set_footer(text='Accuracy of IP geolocation lookup may vary per service that is used. This result may not be correct, for some addresses.')
+        embed.set_footer(text='Note that accuracy of IP geolocation lookup may vary per service that is used. This result may not be correct for some addresses.')
         await command.get_channel().send(embed=embed)
 
-    # if it is a bad response
     else:
-        await command.get_channel().send(embed=Util.create_simple_embed(f'Unknown error processing request. Not a valid IPv4 address? Status {response.get("status")}', MessageType.FATAL))
+        if response.get('message', 'invalid ip'):
+            await command.get_channel().send(embed=Util.create_simple_embed(f'Not a valid IPv4 address. Message: ({response.get("message")})', MessageType.NEGATIVE))
+        else:
+            await command.get_channel().send(embed=Util.create_simple_embed(f'Unknown error. Message: ({response.get("message")}), ({code})', MessageType.FATAL))
 
 
+# https://newton.vercel.app/
 @bot.command(name='math', hidden=False,
     brief='Do some math',
     usage='[simplify|factor|derive|integrate|zeroes|tangent|cos|sin|tan|arccos|arcsin|arc|tan|abs|log] [expression]',
@@ -554,15 +572,16 @@ async def command_math(context: commands.Context):
     if (print_debug_if_needed(command, response)):
         return
     
-    # this API does not return 400 when it is a bad request...
-    if mime == ResponseType.JSON and code == 200:
+    if Util.is_200(code):
         result = response.get('result')
         confirmed_expression = response.get('expression')
         await command.get_channel().send(f'**{operation.capitalize()}: {confirmed_expression}**```{result}```')
 
-    # if it is a bad response
-    else:
-        await command.get_channel().send(embed=Util.create_simple_embed(f'Unknown error processing request. Is it a valid request? Code {code}', MessageType.FATAL))
+    elif Util.is_400(code):
+        await command.get_channel().send(embed=Util.create_simple_embed(f'No valid response. Perhaps the expression could not be parsed. ({code})', MessageType.NEGATIVE))
+        
+    else: # server error 500 or something else unknown
+        await command.get_channel().send(embed=Util.create_simple_embed(f'Something went wrong while getting a response. ({code})', MessageType.FATAL))
 
 
 # https://docs.aviationapi.com/#tag/airports
