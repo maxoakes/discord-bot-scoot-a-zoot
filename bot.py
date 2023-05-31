@@ -1,14 +1,23 @@
 import asyncio
 import datetime
+from enum import Enum
 import os
+import json
 import discord
 from discord.ext import commands
 from dotenv import load_dotenv
 from Bot.Quote import Quote
 from Command import Command
-from Util import MessageType, ResponseType, Util
+from Util import MessageType, Util
 
-CONFIRMATION_TIME = 20.0
+class EventType(Enum):
+    EarthquakePacific = 'earthquake_pacific'
+    EarthquakeGlobal = 'earthquake_global'
+    EventUnknown = '__unknown__'
+
+EVENT_SUB_PATH = r'EventSubscribers/'
+EVENT_POLL_RATE = 5*60 # seconds
+CONFIRMATION_TIME = 20.0 # seconds
 load_dotenv()
 intents = discord.Intents.all()
 bot = commands.Bot(command_prefix=Command.COMMAND_CHAR, intents=intents)
@@ -44,15 +53,73 @@ async def on_ready():
         print(f"Initialized for '{guild.name}' with channel={temp_default_channel}")
     print("READY!")
 
+    # list of subscription functions
+    bot.dispatch('earthquake_global_watcher')
+
 
 @bot.add_check
 def check_command_context(context: commands.Context):
-    return context.message.channel.id == default_channels[context.guild.id]
+    return isinstance(context.channel, discord.channel.DMChannel) or context.message.channel.id == default_channels[context.guild.id]
 
 
 # #####################################
 # Commands
 # #####################################
+
+@bot.command(name='event', hidden=False, 
+    brief='Subscribe or unsubscribe the channel from an event tracker',
+    usage='<[sub|unsub] [earthquakes_pacific|earthquakes_global]>',
+    description='Subscribe or unsubscribe the channel from an event tracker')
+async def command_event(context: commands.Context):
+    command = Command(context.message)
+    input_event_string = command.get_part(2)
+    action_string = command.get_part(1)
+
+    event_type = EventType.EventUnknown
+    if input_event_string == 'earthquakes_pacific':
+        event_type = EventType.EarthquakePacific
+        
+    elif input_event_string == 'earthquakes_global':
+        event_type = EventType.EarthquakeGlobal
+
+    # final check before performing the action
+    if not action_string in ['sub', 'unsub'] or event_type == EventType.EventUnknown:
+        return
+    
+    # find the file to append this channel id to
+    file_path = fr'{EVENT_SUB_PATH}{event_type.value}.json'
+    channel_to_add = command.get_channel().id
+
+    if os.path.isfile(file_path):
+        try:
+            # attempt to get file contents
+            contents = {}
+            with open(file_path, 'r') as file:
+                file_contents: dict[int, list[int]] = json.load(file)
+                contents = file_contents
+
+            # add or remove the channel id based on the requested action
+            if action_string == 'sub':
+                if not channel_to_add in contents['subscribers']:
+                    contents['subscribers'].append(channel_to_add)
+                else:
+                    await command.get_channel().send(embed=Util.create_simple_embed(f'This channel is already subscribed to this event'))
+                    return
+            else:
+                contents['subscribers'].remove(channel_to_add)
+
+            # write the object back to the file
+            with open(file_path, 'w') as file:
+                json.dump(contents, file)
+
+            channel_string = command.get_channel()
+            await command.get_channel().send(embed=Util.create_simple_embed(f'Successfully performed {action_string} on channel {channel_string}'))
+
+        except ValueError as v:
+            print(f'No such channel is subscribed to that event: {v}')
+        except Exception as e:
+            print(f'There was an error subscribing {channel_to_add} to {file_path}: {e}')
+
 
 @bot.command(name='ping', hidden=True, brief='Get a response')
 async def command_ping(context: commands.Context):
@@ -734,6 +801,102 @@ async def command_weather(context: commands.Context):
         await command.get_channel().send(embed=Util.create_simple_embed(f'Something went wrong while getting a response. ({code})', MessageType.FATAL))
 
 
+# #####################################
+# Subscription Events
+# #####################################
+
+@bot.event
+async def on_earthquake_global_watcher():
+    print('now watching for new earthquake events')
+    min_mag = 7.0
+    file_path = fr'{EVENT_SUB_PATH}{EventType.EarthquakeGlobal.value}.json'
+    while True:
+        # define the basic contents of the subscriber file, in case there is no file and it needs to be written this loop
+        now = datetime.datetime.now().timestamp()
+        this_iteration_contents = {
+            'last_checked': now,
+            'subscribers': []
+        }
+        try:
+            if not os.path.isfile(file_path):
+                with open(file_path, 'a+') as file:
+                    json.dump(this_iteration_contents, file)
+            else:
+                with open(file_path, 'r') as file:
+                    contents = json.load(file)
+                    this_iteration_contents = contents
+        except Exception as e:
+            print(f'There was an error processing {file_path} before API call: {e}')
+            await asyncio.sleep(EVENT_POLL_RATE)
+            continue
+        
+        new_quakes = await get_earthquakes_since_time(this_iteration_contents['last_checked'], min_mag=min_mag)
+        this_iteration_contents['last_checked'] = now
+
+        # write last check time to file
+        if os.path.isfile(file_path):
+            try:
+                with open(file_path, 'w') as file:
+                    json.dump(this_iteration_contents, file)
+            except Exception as e:
+                print(f'There was an error writing to {file_path} after API call: {e}')
+                await asyncio.sleep(EVENT_POLL_RATE)
+                continue
+
+        if len(new_quakes) == -1:
+            await asyncio.sleep(EVENT_POLL_RATE)
+            continue
+
+        # perform announcements
+        all_channels = this_iteration_contents.get('subscribers', [])
+        for quake in new_quakes:
+            # (location, mag, time, depth, this_latt, this_long)
+            embed = discord.Embed(title=f'Earthquake: {quake[0]}', url=f'https://www.google.com/maps/@{quake[4]},{quake[5]},10z', color=MessageType.INFO.value)
+            embed.add_field(name='Location', value=quake[0], inline=False)
+            embed.add_field(name='Magnitude', value=quake[1], inline=True)
+            embed.add_field(name='Time', value=datetime.datetime.utcfromtimestamp(quake[2]/1000).strftime('%d/%m/%Y, %H:%M:%S UTC'), inline=True)
+            embed.add_field(name='Depth', value=f'{quake[3]}km', inline=True)
+            embed.add_field(name='Coordinates', value=f'{quake[4]}, {quake[5]}', inline=False)
+            embed.set_footer(text='This channel is subscribed to the `EarthquakesGlobal` event')
+
+            for channel in all_channels:
+                target_channel = bot.get_channel(channel)
+                if target_channel:
+                    await target_channel.send(embed=embed)        
+        
+        # wait for next loop
+        await asyncio.sleep(EVENT_POLL_RATE)
+
+# pacific
+# new_quakes = await get_earthquakes_since_time(this_iteration_contents['last_checked'], 45.44683044, -122.77973641, 5000, 3.0)
+
+async def get_earthquakes_since_time(start_time=0, center_latt=None, center_long=None, radius=None, min_mag=0.0):
+    base_query = 'https://earthquake.usgs.gov/fdsnws/event/1/query?format=geojson'
+    time_format = datetime.datetime.utcfromtimestamp(start_time).strftime('%Y-%m-%dT%H:%M:%S%z') # 2023-05-30T20:22:58+00:00
+    time_string = f'&starttime={time_format}' if start_time else ''
+    radius_string = f'&maxradiuskm={radius}' if radius else ''
+    mag_string = f'&minmagnitude={min_mag}' if min_mag else ''
+    coords = ''
+    if center_latt and center_long:
+        coords = f'&latitude={center_latt}&longitude={center_long}'
+    (response, mime, code) = await Util.http_get(f'{base_query}{time_string}{coords}{radius_string}{mag_string}')
+
+    if not Util.is_200(code):
+        print(f'USGS query was not successful ({code})')
+        return False
+    
+    all_earthquakes = response.get('features', [])
+    results = []
+    for quake in all_earthquakes:
+        time = quake.get('properties').get('time')
+        mag = quake.get('properties').get('mag')
+        location = quake.get('properties').get('place')
+        depth = quake.get('geometry').get('coordinates')[2]
+        this_latt = quake.get('geometry').get('coordinates')[1]
+        this_long = quake.get('geometry').get('coordinates')[0]
+        results.append((location, mag, time, depth, this_latt, this_long))
+    return results
+
 # TODO
 # subscriptions, dispatch forever loop to watch for new API returns
 # https://earthquake.usgs.gov/fdsnws/event/1/
@@ -746,9 +909,8 @@ def print_debug_if_needed(command: Command, response: dict | str):
     if command.does_arg_exist('raw'):
         import json
         try:
-            pretty_dump = json.dumps(response, indent=4)
-            with open(fr"logs/command.{command.get_part(0)}.output.json", "w") as text_file:
-                text_file.write(pretty_dump)
+            with open(fr"logs/command.{command.get_part(0)}.output.json", "w") as file:
+                json.dump(response, file, indent=4)
             print("File written")
         except:
             print("Failed to write dump")

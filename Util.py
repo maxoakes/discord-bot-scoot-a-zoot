@@ -38,7 +38,7 @@ class Util:
             return await Util.http_get(url)
 
     async def http_get(url: str) -> tuple[dict | str, ResponseType, int]:
-        print(url)
+        print(f'GET {url}')
         async with aiohttp.ClientSession() as session:
             async with session.get(url) as response:
                 content_type: str = response.headers.get('content-type')
