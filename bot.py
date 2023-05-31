@@ -55,6 +55,7 @@ async def on_ready():
 
     # list of subscription functions
     bot.dispatch('earthquake_global_watcher')
+    bot.dispatch('earthquake_pacific_watcher')
 
 
 @bot.add_check
@@ -113,7 +114,7 @@ async def command_event(context: commands.Context):
                 json.dump(contents, file)
 
             channel_string = command.get_channel()
-            await command.get_channel().send(embed=Util.create_simple_embed(f'Successfully performed {action_string} on channel {channel_string}'))
+            await command.get_channel().send(embed=Util.create_simple_embed(f'Successfully performed {action_string} on channel {channel_string} for {event_type.value}'))
 
         except ValueError as v:
             print(f'No such channel is subscribed to that event: {v}')
@@ -807,9 +808,19 @@ async def command_weather(context: commands.Context):
 
 @bot.event
 async def on_earthquake_global_watcher():
-    print('now watching for new earthquake events')
-    min_mag = 7.0
+    print('now watching for new global earthquake events')
     file_path = fr'{EVENT_SUB_PATH}{EventType.EarthquakeGlobal.value}.json'
+    await generic_earthquake_watcher('Global', file_path, None, None, None, 6.0)
+
+
+@bot.event
+async def on_earthquake_pacific_watcher():
+    print('now watching for new pacific earthquake events')
+    file_path = fr'{EVENT_SUB_PATH}{EventType.EarthquakePacific.value}.json'
+    await generic_earthquake_watcher('Pacific', file_path, 45.44683044, -122.77973641, 200, 3.5)
+
+
+async def generic_earthquake_watcher(earthquake_display_string, file_path, latt, long, radius, min_mag):
     while True:
         # define the basic contents of the subscriber file, in case there is no file and it needs to be written this loop
         now = datetime.datetime.now().timestamp()
@@ -817,58 +828,72 @@ async def on_earthquake_global_watcher():
             'last_checked': now,
             'subscribers': []
         }
-        try:
-            if not os.path.isfile(file_path):
-                with open(file_path, 'a+') as file:
-                    json.dump(this_iteration_contents, file)
-            else:
-                with open(file_path, 'r') as file:
-                    contents = json.load(file)
-                    this_iteration_contents = contents
-        except Exception as e:
-            print(f'There was an error processing {file_path} before API call: {e}')
+        this_iteration_contents = await load_subscriber_file(file_path, this_iteration_contents)
+        if not this_iteration_contents:
             await asyncio.sleep(EVENT_POLL_RATE)
             continue
         
-        new_quakes = await get_earthquakes_since_time(this_iteration_contents['last_checked'], min_mag=min_mag)
+        new_quakes = await get_earthquakes_since_time(this_iteration_contents['last_checked'], latt, long, radius, min_mag)
         this_iteration_contents['last_checked'] = now
 
         # write last check time to file
-        if os.path.isfile(file_path):
-            try:
-                with open(file_path, 'w') as file:
-                    json.dump(this_iteration_contents, file)
-            except Exception as e:
-                print(f'There was an error writing to {file_path} after API call: {e}')
-                await asyncio.sleep(EVENT_POLL_RATE)
-                continue
+        result = await write_subscriber_file(file_path, this_iteration_contents)
+        if not result:
+            await asyncio.sleep(EVENT_POLL_RATE)
+            continue
 
         if len(new_quakes) == -1:
             await asyncio.sleep(EVENT_POLL_RATE)
             continue
 
         # perform announcements
-        all_channels = this_iteration_contents.get('subscribers', [])
         for quake in new_quakes:
             # (location, mag, time, depth, this_latt, this_long)
-            embed = discord.Embed(title=f'Earthquake: {quake[0]}', url=f'https://www.google.com/maps/@{quake[4]},{quake[5]},10z', color=MessageType.INFO.value)
+            embed = discord.Embed(title=f'{earthquake_display_string} Earthquake: {quake[0]}', url=f'https://www.google.com/maps/@{quake[4]},{quake[5]},10z', color=MessageType.INFO.value)
             embed.add_field(name='Location', value=quake[0], inline=False)
             embed.add_field(name='Magnitude', value=quake[1], inline=True)
-            embed.add_field(name='Time', value=datetime.datetime.utcfromtimestamp(quake[2]/1000).strftime('%d/%m/%Y, %H:%M:%S UTC'), inline=True)
+            embed.add_field(name='Time', value=datetime.datetime.utcfromtimestamp(quake[2]/1000).strftime('%m/%d/%Y, %H:%M:%S UTC'), inline=True)
             embed.add_field(name='Depth', value=f'{quake[3]}km', inline=True)
-            embed.add_field(name='Coordinates', value=f'{quake[4]}, {quake[5]}', inline=False)
-            embed.set_footer(text='This channel is subscribed to the `EarthquakesGlobal` event')
+            embed.add_field(name='Coordinates', value=f'{round(quake[4], 4)}, {round(quake[5], 4)}', inline=False)
+            embed.set_footer(text=f'Message generated at {datetime.datetime.now().strftime("%m/%d/%Y, %H:%M:%S UTC")}\nThis channel is subscribed to the `EarthquakesGlobal` event')
 
-            for channel in all_channels:
+            for channel in this_iteration_contents.get('subscribers', []):
                 target_channel = bot.get_channel(channel)
                 if target_channel:
                     await target_channel.send(embed=embed)        
-        
+            
         # wait for next loop
         await asyncio.sleep(EVENT_POLL_RATE)
 
-# pacific
-# new_quakes = await get_earthquakes_since_time(this_iteration_contents['last_checked'], 45.44683044, -122.77973641, 5000, 3.0)
+
+async def write_subscriber_file(file_path, subscriber_object):
+    if os.path.isfile(file_path):
+        try:
+            with open(file_path, 'w') as file:
+                json.dump(subscriber_object, file)
+        except Exception as e:
+            print(f'There was an error writing to {file_path} after API call: {e}')
+            return False
+    else:
+        return False
+    return True
+
+
+async def load_subscriber_file(file_path, subscriber_object):
+    return_object = subscriber_object
+    try:
+        if not os.path.isfile(file_path):
+            with open(file_path, 'a+') as file:
+                json.dump(return_object, file)
+        else:
+            with open(file_path, 'r') as file:
+                contents = json.load(file)
+                return_object = contents
+    except Exception as e:
+        print(f'There was an error processing {file_path} before API call: {e}')
+        return False
+    return return_object
+
 
 async def get_earthquakes_since_time(start_time=0, center_latt=None, center_long=None, radius=None, min_mag=0.0):
     base_query = 'https://earthquake.usgs.gov/fdsnws/event/1/query?format=geojson'
@@ -888,18 +913,15 @@ async def get_earthquakes_since_time(start_time=0, center_latt=None, center_long
     all_earthquakes = response.get('features', [])
     results = []
     for quake in all_earthquakes:
-        time = quake.get('properties').get('time')
-        mag = quake.get('properties').get('mag')
-        location = quake.get('properties').get('place')
+        time = quake.get('properties').get('time', 0)
+        mag = quake.get('properties').get('mag', 'Unknown Magnitude')
+        location = quake.get('properties').get('place', 'Uninhabited Area')
         depth = quake.get('geometry').get('coordinates')[2]
         this_latt = quake.get('geometry').get('coordinates')[1]
         this_long = quake.get('geometry').get('coordinates')[0]
         results.append((location, mag, time, depth, this_latt, this_long))
     return results
 
-# TODO
-# subscriptions, dispatch forever loop to watch for new API returns
-# https://earthquake.usgs.gov/fdsnws/event/1/
 
 # #####################################
 # Print raw json if needed

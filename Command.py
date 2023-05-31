@@ -2,7 +2,7 @@ import discord
 
 class Command:
     # final static
-    COMMAND_CHAR = '>>'
+    COMMAND_CHAR = '!'
 
     # private variables
     __base: list[str] = []
