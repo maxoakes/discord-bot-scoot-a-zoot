@@ -1,10 +1,11 @@
+import os
 import datetime
 import threading
-import json
 import aiohttp
-from enum import Enum
 import discord
 from discord.ext import commands
+from dotenv import load_dotenv
+from enum import Enum
 
 class MessageType(Enum):
     FATAL = 0xDC3545 #Red
@@ -22,13 +23,22 @@ class ResponseType(Enum):
     UNKNOWN = 3
 
 class Util:
+
     AFFIRMATIVE_RESPONSE = ['y', 'ya', 'ye', 'yea', 'yes', 'yeah', 't', 'true']
     NEGATIVE_RESPONSE = ['n', 'no', 'nah', 'nay', 'f', 'false']
     END_RESPONSE = ['s', 'stop', 'e', 'end', 'exit', 'h', 'halt', 'q', 'quit']
     YTDL_OPTIONS = {'format': 'bestaudio/best', 'noplaylist':'True', 'quiet':'True'}
     FILE_PROTOCOL_PREFIX = "file://"
     T = datetime.datetime.now().timestamp()
+    __env_loaded = False
+    __command_char = '>>'
     
+    def get_command_char():
+        if not Util.__env_loaded:
+            load_dotenv()
+            Util.__command_char = os.getenv('COMMAND_CHAR')
+        return Util.__command_char
+
     def create_simple_embed(text="Placeholder Text", type=MessageType.POSITIVE) -> discord.Embed:
         embed = discord.Embed(description=text, color=type.value)
         return embed

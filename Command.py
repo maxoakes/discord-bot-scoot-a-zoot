@@ -1,8 +1,7 @@
 import discord
+from Util import Util
 
 class Command:
-    # final static
-    COMMAND_CHAR = '!'
 
     # private variables
     __base: list[str] = []
@@ -18,7 +17,7 @@ class Command:
         self.__author = message.author
         self.__channel = message.channel
         self.__message = message
-        self.__text = message.content[len(Command.COMMAND_CHAR):].strip()
+        self.__text = message.content[len(Util.get_command_char()):].strip()
 
         # reset
         self.__base = []

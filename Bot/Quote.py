@@ -66,9 +66,9 @@ class Quote:
         import discord
         embed = discord.Embed(title="Quote (without quotation marks)", color=MessageType.QUOTE.value)
         embed.add_field(name="Text", value=self.__quote, inline=False)
-        embed.add_field(name="Author", value=self.__author, inline=False)
+        embed.add_field(name="Author", value=self.__author, inline=True)
         embed.add_field(name="Location", value=self.__location, inline=True)
-        embed.add_field(name="Time", value=self.__time, inline=False)
+        embed.add_field(name="Time", value=self.__time, inline=True)
         embed.set_footer(text=f"Added by {self.__creator}")
         return embed
     

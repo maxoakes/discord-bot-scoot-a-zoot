@@ -20,7 +20,7 @@ EVENT_POLL_RATE = 5*60 # seconds
 CONFIRMATION_TIME = 20.0 # seconds
 load_dotenv()
 intents = discord.Intents.all()
-bot = commands.Bot(command_prefix=Command.COMMAND_CHAR, intents=intents)
+bot = commands.Bot(command_prefix=Util.get_command_char(), intents=intents)
 default_channels: dict[int, int] = {} # [key=guild id, val=channel id]
 
 # on startup
@@ -163,24 +163,24 @@ async def command_quote(context: commands.Context):
         # unknown command
         case _:
             await command.get_message().channel.send(content=command.get_author().mention, 
-                embed=Util.create_simple_embed(f"This is not a valid command. Please consult `{Command.COMMAND_CHAR}help quote`", MessageType.NEGATIVE))
+                embed=Util.create_simple_embed(f"This is not a valid command. Please consult `{Util.get_command_char()}help quote`", MessageType.NEGATIVE))
 
     # add to the database if the action calls for it
     if add_to_db:
         if quote.is_bad():
             await command.get_message().channel.send(content=command.get_author().mention, 
-                embed=Util.create_simple_embed(f"Your quote was malformed. Please consult `{Command.COMMAND_CHAR}help quote`", MessageType.FATAL))
+                embed=Util.create_simple_embed(f"Your quote was malformed. Please consult `{Util.get_command_char()}help quote`", MessageType.FATAL))
             return
         
         # confirm the quote to add, and wait for reply
-        await command.get_message().channel.send(f"**{command.get_author().mention}, I will add this quote. Is this correct?** (y/n)", embed=quote.get_embed())
+        await command.get_message().channel.send(f"**{command.get_author().mention}, Is this correct?** (y/n)", embed=quote.get_embed())
         try:
             response: discord.Message = await bot.wait_for('message', check=check_channel_response, timeout=CONFIRMATION_TIME)
 
             # check if there is an affirmative response from the same person
             if response.content.lower().strip() in Util.AFFIRMATIVE_RESPONSE and command.get_author().id == response.author.id:
                 # TODO implement insert query to local DB
-                await command.get_message().channel.send(content=f'{command.get_author().mention}, this quote will **not** be added to the database:')
+                await command.get_message().channel.send(content=f'{command.get_author().mention}, (Not implemented) this quote has been added to the database:')
             else:
                 await command.get_message().channel.send(content=f'{command.get_author().mention}, no affirmative was provided. This quote will **not** be added to the database:')
 
@@ -832,6 +832,11 @@ async def generic_earthquake_watcher(earthquake_display_string, file_path, latt,
         if not this_iteration_contents:
             await asyncio.sleep(EVENT_POLL_RATE)
             continue
+
+        if len(this_iteration_contents['subscribers']) == 0:
+            print(f'No subscribers to Earthquakes {earthquake_display_string}. Skipping API Call.')
+            await asyncio.sleep(EVENT_POLL_RATE)
+            continue
         
         new_quakes = await get_earthquakes_since_time(this_iteration_contents['last_checked'], latt, long, radius, min_mag)
         this_iteration_contents['last_checked'] = now
@@ -940,5 +945,5 @@ def print_debug_if_needed(command: Command, response: dict | str):
     else:
         return False
     
-
-bot.run(os.getenv('BOT_TOKEN'))
+token = os.getenv('DEV_TOKEN') if os.getenv('ENV') == 'DEV' else os.getenv('BOT_TOKEN')
+bot.run(token)

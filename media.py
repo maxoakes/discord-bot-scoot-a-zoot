@@ -14,7 +14,7 @@ from Media.PlaylistRequest import PlaylistRequest
 MEDIA_PRESETS_PATH = r'Media/presets.csv'
 load_dotenv()
 intents = discord.Intents.all()
-bot = commands.Bot(command_prefix=Command.COMMAND_CHAR, intents=intents)
+bot = commands.Bot(command_prefix=Util.get_command_char(), intents=intents)
 media_manager: MediaManager = MediaManager()
 playlist: LinearPlaylist = LinearPlaylist(bot)
 this_guild: discord.Guild
@@ -203,7 +203,7 @@ async def command_presets(context: commands.Context):
                 # print(row) # [preset, url, desc]
                 if row[0].lower() != 'preset':
                     preset_list = preset_list + f"{i}. `{row[0]}` {row[2]}\n"
-        out = f"**The following presets are available when requesting media streams in the format `{Command.COMMAND_CHAR}stream --preset=<preset_name>`:**\n{preset_list}"
+        out = f"**The following presets are available when requesting media streams in the format `{Util.get_command_char()}stream --preset=<preset_name>`:**\n{preset_list}"
     except:
         out = "There was a problem reading the presets file."
     await context.send(out)
@@ -342,6 +342,7 @@ async def disconnect_from_voice():
         await media_manager.get_voice_client().disconnect()
     media_manager.set_voice_channel(None)
 
+
 async def buffer_for_seconds(seconds: float):
     if media_manager.get_voice_client() and seconds > 0.0:
         print(f"  Allowing {seconds} second buffer")
@@ -350,4 +351,6 @@ async def buffer_for_seconds(seconds: float):
         media_manager.get_voice_client().resume()
         print(f"  Resuming...")
 
-bot.run(os.getenv('DJ_TOKEN'))
+
+token = os.getenv('DEV_TOKEN') if os.getenv('ENV') == 'DEV' else os.getenv('DJ_TOKEN')
+bot.run(token)
