@@ -145,8 +145,8 @@ async def command_quote(context: commands.Context):
         case 'add' | 'a':
             add_to_db = True
             quote = Quote(command.get_author().name,
-                quote=command.get_arg('quote').replace('"', '').replace("'", ''), 
-                author=command.get_arg('author'), 
+                quote=command.get_arg('quote', default='<No content>').replace('"', '').replace("'", ''), 
+                author=command.get_arg('author', default='Anonymous'), 
                 location=command.get_arg('location'), 
                 time=command.get_arg('time'))
             
@@ -182,7 +182,7 @@ async def command_quote(context: commands.Context):
                 # TODO implement insert query to local DB
                 await command.get_message().channel.send(content=f'{command.get_author().mention}, (Not implemented) this quote has been added to the database:')
             else:
-                await command.get_message().channel.send(content=f'{command.get_author().mention}, no affirmative was provided. This quote will **not** be added to the database:')
+                await command.get_message().channel.send(content=f'{command.get_author().mention}, no affirmative response was provided. This quote will **not** be added to the database:')
 
         except TimeoutError:
             await command.get_message().channel.send(content=f'{command.get_author().mention}, no response was provided. This quote will **not** be added to the database:')

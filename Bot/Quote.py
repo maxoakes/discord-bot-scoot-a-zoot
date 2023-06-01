@@ -2,13 +2,13 @@ from Util import MessageType
 
 
 class Quote:
-    __quote: str = None
-    __author: str = "Anonymous"
-    __location: str = None
-    __time: str = None
+    __quote: str
+    __author: str
+    __location: str
+    __time: str
     __creator: str
 
-    def __init__(self, creator, perform_parse=False, raw='', quote=None, author=None, location=None, time=None):
+    def __init__(self, creator, perform_parse=False, raw='', quote='<No content>', author='Anonymous', location=None, time=None):
         self.__creator = creator
         if perform_parse:
             quote_type = '"'

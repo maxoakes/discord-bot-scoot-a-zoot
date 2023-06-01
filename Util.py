@@ -30,6 +30,7 @@ class Util:
     YTDL_OPTIONS = {'format': 'bestaudio/best', 'noplaylist':'True', 'quiet':'True'}
     FILE_PROTOCOL_PREFIX = "file://"
     T = datetime.datetime.now().timestamp()
+    
     __env_loaded = False
     __command_char = '>>'
     
