@@ -7,11 +7,6 @@ from discord.ext import commands
 from dotenv import load_dotenv
 from enum import Enum
 
-class EventType(Enum):
-    EarthquakePacific = 'earthquake_pacific'
-    EarthquakeGlobal = 'earthquake_global'
-    EventUnknown = '__unknown__'
-
 class MessageType(Enum):
     FATAL = 0xDC3545 #Red
     NEGATIVE = 0xFFC107 #Orange

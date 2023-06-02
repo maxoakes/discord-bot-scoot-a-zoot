@@ -3,6 +3,7 @@ import sys
 import discord
 from discord.ext import commands
 from dotenv import load_dotenv
+from Cogs.Events import Events
 from Cogs.Global import Global
 from Util import Util
 from Cogs.Media import Media
@@ -32,6 +33,7 @@ if input_string in ['media', 'dj', 'player']:
 elif input_string in ['bot', 'chat', 'net', 'text']:
     token = os.getenv('BOT_TOKEN') if not token else token
     bot.add_cog(Tools(bot, ['bot-spam', 'bot-commands', 'botspam']))
+    bot.add_cog(Events(bot))
 
 if token:
     bot.add_cog(Global(bot))
