@@ -7,6 +7,11 @@ from discord.ext import commands
 from dotenv import load_dotenv
 from enum import Enum
 
+class EventType(Enum):
+    EarthquakePacific = 'earthquake_pacific'
+    EarthquakeGlobal = 'earthquake_global'
+    EventUnknown = '__unknown__'
+
 class MessageType(Enum):
     FATAL = 0xDC3545 #Red
     NEGATIVE = 0xFFC107 #Orange
@@ -33,12 +38,19 @@ class Util:
     
     __env_loaded = False
     __command_char = '>>'
+    __author_mention = 'Author Unspecified'
     
     def get_command_char():
         if not Util.__env_loaded:
             load_dotenv()
             Util.__command_char = os.getenv('COMMAND_CHAR')
         return Util.__command_char
+
+    def get_author_mention():
+        if not Util.__env_loaded:
+            load_dotenv()
+            Util.__author_mention = os.getenv('AUTHOR_MENTION')
+        return Util.__author_mention
 
     def create_simple_embed(text="Placeholder Text", type=MessageType.POSITIVE) -> discord.Embed:
         embed = discord.Embed(description=text, color=type.value)

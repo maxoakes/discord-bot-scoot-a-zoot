@@ -1,1 +1,1 @@
-py media.py 0
+py main.py media

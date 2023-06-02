@@ -19,11 +19,3 @@ A universal bot will not be released. When the bots are run, they are each inten
 ### Required dependencies to `pip install`:
 
 ```pip install py-cord ffmpeg asyncio pynacl python-dotenv youtube-search requests "git+https://github.com/ytdl-org/youtube-dl.git" --upgrade py-cord[voice] py-cord[speed]```
-
-### To Run the Music Bot:
-```py media.py (server_id from menu)```
-
-For each server that the bot knows about, a list of them will appear on startup. A single server will need to be chosen to serve.
-
-### To Run the Command Bot:
-```py bot.py```
