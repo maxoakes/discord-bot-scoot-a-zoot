@@ -3,10 +3,46 @@ import discord
 import datetime
 from discord.ext import commands
 
+from Util import Util
+
 class Global(commands.Cog):
-    def __init__(self, bot):
+    bot: discord.Bot
+
+    def __init__(self, bot, channel_names):
         self.bot = bot
+        self.possible_channel_names = channel_names
         self._last_member = None
+
+
+    # on startup
+    @commands.Cog.listener()
+    async def on_ready(self):
+        print(f"We have logged in as {self.bot.user}")
+
+        for guild in self.bot.guilds:
+            temp_default_channel = guild.system_channel
+
+            # attempt to find default command channel
+            for channel in guild.text_channels:
+                if channel.permissions_for(guild.me).send_messages:
+                    if channel.name in self.possible_channel_names:
+                        temp_default_channel = channel
+                        break
+            
+            # assign to a fallback channel if bot channel not found
+            if temp_default_channel == None:
+                print(f"No bot command channel found for {guild.name}, finding default")
+                temp_default_channel = guild.system_channel
+                if temp_default_channel and temp_default_channel.permissions_for(guild.me).send_messages:
+                    temp_default_channel = channel
+
+            if temp_default_channel == None:
+                print('WARNING, no default command channel is accessible. This bot will not have full functionality.')
+
+            # assign command channel with the server
+            Util.DEFAULT_COMMAND_CHANNEL[guild.id] = temp_default_channel.id
+            print(f"Initialized for '{guild.name}' with channel={temp_default_channel}")
+        print(f"READY! Initialized Global cog.'")
 
 
     @commands.Cog.listener()

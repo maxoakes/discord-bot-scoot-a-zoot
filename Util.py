@@ -23,7 +23,8 @@ class ResponseType(Enum):
     UNKNOWN = 3
 
 class Util:
-
+    CONFIRMATION_TIME = 20.0 # seconds
+    DEFAULT_COMMAND_CHANNEL: dict[int, int] = {} # [key=guild id, val=channel id]
     AFFIRMATIVE_RESPONSE = ['y', 'ya', 'ye', 'yea', 'yes', 'yeah', 't', 'true']
     NEGATIVE_RESPONSE = ['n', 'no', 'nah', 'nay', 'f', 'false']
     END_RESPONSE = ['s', 'stop', 'e', 'end', 'exit', 'h', 'halt', 'q', 'quit']
@@ -41,19 +42,29 @@ class Util:
             Util.__command_char = os.getenv('COMMAND_CHAR')
         return Util.__command_char
 
+
     def get_author_mention():
         if not Util.__env_loaded:
             load_dotenv()
             Util.__author_mention = os.getenv('AUTHOR_MENTION')
         return Util.__author_mention
 
+
+    async def broadcast(bot: discord.Bot, text: str, embed: discord.Embed):
+        for (guild_id, channel_id) in Util.DEFAULT_COMMAND_CHANNEL.items():
+            await bot.get_channel(channel_id).send(content=text, embed=embed)
+            print(f'Broadcast message sent to {bot.get_guild(guild_id).name}/{bot.get_channel(channel_id).name}')
+
+
     def create_simple_embed(text="Placeholder Text", type=MessageType.POSITIVE) -> discord.Embed:
         embed = discord.Embed(description=text, color=type.value)
         return embed
         
+
     async def http_get_thinking(url: str, context: commands.Context) -> tuple[dict | str, ResponseType, int]:
         async with context.channel.typing():
             return await Util.http_get(url)
+
 
     async def http_get(url: str) -> tuple[dict | str, ResponseType, int]:
         print(f'GET {url}')
@@ -73,6 +84,7 @@ class Util:
                     return (await response.json(), mime, code)
                 else:
                     return (response.text, mime, code)
+
 
     def build_embed_fields(embed: discord.Embed, name_values: list[tuple[str, object, bool | None]]) -> None:
         for pairing in name_values:

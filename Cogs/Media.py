@@ -12,62 +12,17 @@ class Media(commands.Cog):
     MEDIA_PRESETS_PATH = r'Media/presets.csv'
     media_manager: MediaManager
     playlist: LinearPlaylist
-    this_guild: discord.Guild
-    possible_channel_names: list
-    default_channel: discord.TextChannel = None
     bot: discord.Bot
-    channel_selection: int
 
-    def __init__(self, bot, channel_names, channel_selection=-1):
+    def __init__(self, bot):
         self.bot = bot
         self.media_manager = MediaManager()
-        self.playlist = LinearPlaylist(bot)
-        self.possible_channel_names = channel_names
-        self.channel_selection = channel_selection
+        self.playlist = LinearPlaylist()
             
 
-    # on startup
     @commands.Cog.listener()
     async def on_ready(self):
-        print(f"We have logged in as {self.bot.user}")
-        # select the server to manage
-        print("Available Guilds:")
-        for i, g in enumerate(self.bot.guilds):
-            print(f"  [{i}] = {g.name} ({g.id})")
-        
-        try:
-            selected_guild: int
-            if self.channel_selection > -1:
-                selected_guild = self.channel_selection
-            else:
-                selected_guild = input("Index Number Guild to manage: ")
-            self.this_guild = self.bot.guilds[int(selected_guild)]
-        except:
-            print("ERROR, Could not properly parse input. Selecting first entry...")
-            self.this_guild = self.bot.guilds[0]
-
-        print(f"Now managing '{self.this_guild.name}' ({self.this_guild.id})")
-
-        # attempt to find the default channel
-        temp_default_channel = self.this_guild.system_channel
-
-        # attempt to find the two types of channels for the purpose of this bot
-        for channel in self.this_guild.text_channels:
-            if channel.permissions_for(self.this_guild.me).send_messages:
-                if channel.name in self.possible_channel_names:
-                    self.default_channel = channel
-            
-        # if media channel is not found, attempt to assign a fallback channel that the users can send commands
-        if self.default_channel == None:
-            print(f"\tNo media channel found for {self.this_guild.name}, finding default")
-            if temp_default_channel.permissions_for(self.this_guild.me).send_messages:
-                self.default_channel = temp_default_channel
-                print(f"I have found a default channel at {self.this_guild.name}/{channel.name}")
-        if self.default_channel == None:
-            print('WARNING, no default media request channel is accessible. This bot will not have full functionality.')
-
-        # send opening message
-        print(f"READY! Initialized for '{self.this_guild.name}' with default-channel='{self.default_channel}'")
+        print(f"READY! Initialized Media cog.'")
 
 
     # #####################################
@@ -75,7 +30,7 @@ class Media(commands.Cog):
     # #####################################
 
     def is_command_channel(self, command: Command):
-        return isinstance(command.get_channel(), discord.channel.DMChannel) or command.get_channel().id == self.default_channel.id
+        return isinstance(command.get_channel(), discord.channel.DMChannel) or command.get_channel().id == Util.DEFAULT_COMMAND_CHANNEL[command.get_guild().id]
     
 
     def is_admin_author(self, command: Command):
@@ -96,7 +51,7 @@ class Media(commands.Cog):
         request = await self.service_search(command)
         if request:
             embed = await request.get_embed(MessageType.POSITIVE, pos=len(self.playlist.get_next_queue()))
-            await self.default_channel.send(f"**Adding this search result to playlist queue:**", embed=embed)
+            await command.get_channel().send(f"**Adding this search result to playlist queue:**", embed=embed)
             self.playlist.add_queue(request)
             await self.media_play()
 
@@ -129,16 +84,16 @@ class Media(commands.Cog):
                 print(f'Error processing presets file: {e}')
         # if there was no source url or valid preset, it is a bad request
         if source_string == "" or (source_string.find('http') != 0 and source_string.find('file') != 0):
-            await self.default_channel.send(embed=Util.create_simple_embed(f"Bad input. Must be an `http://`, `https://`, or `file://` protocol, or see the `presets` command", MessageType.NEGATIVE))
+            await command.get_channel().send(embed=Util.create_simple_embed(f"Bad input. Must be an `http://`, `https://`, or `file://` protocol, or see the `presets` command", MessageType.NEGATIVE))
             return
         if source_string:
-            await self.default_channel.send(f"**Acquiring metadata for `{source_string[:64]}`...**")
+            await command.get_channel().send(f"**Acquiring metadata for `{source_string[:64]}`...**")
             async with command.get_channel().typing():
                 request = PlaylistRequest(source_string, command.get_author(), use_opus)
                 await request.create_metadata(source_string.find(Util.FILE_PROTOCOL_PREFIX) == 0)
                 self.playlist.add_queue(request)
                 embed = await request.get_embed(MessageType.POSITIVE, pos=len(self.playlist.get_next_queue()))
-                await self.default_channel.send(f"**Added to playlist queue:**", embed=embed)
+                await command.get_channel().send(f"**Added to playlist queue:**", embed=embed)
             await self.media_play()
 
 
@@ -150,7 +105,7 @@ class Media(commands.Cog):
             return
         
         embed = await self.playlist.get_embed(command.does_arg_exist('full'), MessageType.INFO)
-        await self.default_channel.send(embed=embed)
+        await command.get_channel().send(embed=embed)
 
 
     @commands.command(name='skip', aliases=['next', 'pass'], hidden=False, brief='Move forward one media track')
@@ -174,7 +129,7 @@ class Media(commands.Cog):
         
         if Media.user_in_voice_channel(context.author):
             if self.in_same_voice_channel(context.author):
-                if Media.media_manager.get_voice_channel():
+                if self.media_manager.get_voice_channel():
                     self.playlist.request_movement(PlaylistAction.BACKWARD)
                     self.media_manager.get_voice_client().stop()
 
@@ -186,9 +141,9 @@ class Media(commands.Cog):
             print(f'{command.get_part(0)} failed check. Aborting.')
             return
         
-        if Media.user_in_voice_channel(context.author) and self.in_same_voice_channel(context.author) and Media.media_manager.get_voice_client():
+        if Media.user_in_voice_channel(context.author) and self.in_same_voice_channel(context.author) and self.media_manager.get_voice_client():
             self.playlist.clear_queue()
-            await Media.disconnect_from_voice()
+            await self.disconnect_from_voice()
 
 
     @commands.command(name='pause', aliases=['halt'], hidden=False, brief='Pauses media, does not leave channel')
@@ -198,7 +153,7 @@ class Media(commands.Cog):
             print(f'{command.get_part(0)} failed check. Aborting.')
             return
         
-        if Media.user_in_voice_channel(context.author) and self.in_same_voice_channel(context.author) and Media.media_manager.get_voice_client():
+        if Media.user_in_voice_channel(context.author) and self.in_same_voice_channel(context.author) and self.media_manager.get_voice_client():
             self.media_manager.get_voice_client().pause()
 
 
@@ -209,7 +164,7 @@ class Media(commands.Cog):
             print(f'{command.get_part(0)} failed check. Aborting.')
             return
         
-        if Media.user_in_voice_channel(context.author) and self.in_same_voice_channel(context.author) and Media.media_manager.get_voice_client():
+        if Media.user_in_voice_channel(context.author) and self.in_same_voice_channel(context.author) and self.media_manager.get_voice_client():
             self.media_manager.get_voice_client().resume()
 
 
@@ -223,9 +178,9 @@ class Media(commands.Cog):
         clear_all = command.does_arg_exist('all')
         self.playlist.clear_queue(clear_all)
         if clear_all:
-            await self.default_channel.send(embed=Util.create_simple_embed("Queue and history have been cleared.", MessageType.INFO))
+            await command.get_channel().send(embed=Util.create_simple_embed("Queue and history have been cleared.", MessageType.INFO))
         else:
-            await self.default_channel.send(embed=Util.create_simple_embed("Queue has been cleared.", MessageType.INFO))
+            await command.get_channel().send(embed=Util.create_simple_embed("Queue has been cleared.", MessageType.INFO))
 
 
     @commands.command(name='presets', aliases=['preset'], hidden=False, brief='Show the list of available media presets')
@@ -247,7 +202,7 @@ class Media(commands.Cog):
             out = f"**The following presets are available when requesting media streams in the format `{Util.get_command_char()}stream --preset=<preset_name>`:**\n{preset_list}"
         except:
             out = "There was a problem reading the presets file."
-        await context.send(out)
+        await command.get_channel().send(out)
 
 
     # #####################################
@@ -256,22 +211,26 @@ class Media(commands.Cog):
 
     async def update_playlist_pointer(self):
         self.media_manager.get_voice_client().stop()
+        channel = self.get_text_channel_from_current_media()
         match self.playlist.get_requested_action():           
             case PlaylistAction.FORWARD:
                 self.playlist.iterate_queue()
-                await self.default_channel.send(embed=Util.create_simple_embed('Skipping forward one media track.', MessageType.INFO))
+                if channel:
+                    await channel.send(embed=Util.create_simple_embed('Skipping forward one media track.', MessageType.INFO))
             case PlaylistAction.BACKWARD:
                 self.playlist.move_back_queue()
-                await self.default_channel.send(embed=Util.create_simple_embed('Going back one media track.', MessageType.INFO))
+                if channel:
+                    await channel.send(embed=Util.create_simple_embed('Going back one media track.', MessageType.INFO))
             case PlaylistAction.STAY:
-                await self.default_channel.send(embed=Util.create_simple_embed('Track is done. Moving to next one.', MessageType.INFO))
+                if channel:
+                    await channel.send(embed=Util.create_simple_embed('Track is done. Moving to next one.', MessageType.INFO))
                 self.playlist.iterate_queue()
         await self.media_play()
 
 
     async def media_play(self):
         if self.playlist.is_end():
-            await self.default_channel.send(embed=Util.create_simple_embed("End of playlist. I am leaving. Use `stream` or `search` to request media!", MessageType.INFO))
+            await Util.broadcast(self.bot, text=None, embed=Util.create_simple_embed("End of playlist. I am now open to song requests.", MessageType.INFO))
             await self.disconnect_from_voice()
             return
         
@@ -284,14 +243,16 @@ class Media(commands.Cog):
         
         # cancel this media and move to next if the author not known for some reason
         if not request.get_requester():
-            await self.default_channel.send(embed=Util.create_simple_embed("Requester is not known. Cannot follow!", MessageType.FATAL))
+            print(f"Requester is not known. Cannot follow! {request}")
             self.playlist.iterate_queue()
             return
 
         # check if the requester is in a voice channel so they can be followed
         target_voice_state = request.get_requester().voice
         if not target_voice_state:
-            await self.default_channel.send(embed=Util.create_simple_embed(f'{request.get_requester().name} is not in a voice channel. Going to next playlist item.', MessageType.NEGATIVE))
+            channel = self.get_text_channel_from_current_media()
+            if channel:
+                await channel.send(embed=Util.create_simple_embed(f'{request.get_requester().name} is not in a voice channel. Going to next playlist item.', MessageType.NEGATIVE))
             self.playlist.iterate_queue()
             return
 
@@ -312,7 +273,7 @@ class Media(commands.Cog):
 
         # if the bot is in a different channel than the requester, disconnect and switch to the target one
         else:
-            await self.media_manager.get_voice_client().disconnect()
+            await self.disconnect_from_voice()
             self.media_manager.set_voice_channel(target_voice_channel)
             self.media_manager.set_voice_client(await target_voice_channel.connect())
 
@@ -327,12 +288,15 @@ class Media(commands.Cog):
         
         if not stream or not source_string:
             # if something bad really happens, skip this track
-            await self.default_channel.send(embed=Util.create_simple_embed('Bad source. Exiting.', MessageType.FATAL))
+            try:
+                await self.get_text_channel_from_current_media().send(embed=Util.create_simple_embed('Bad source. Exiting.', MessageType.FATAL))
+            except:
+                print('Failed to notify of bad source. Unknown user/guild?')
             self.media_manager.get_voice_client().stop()
             after_media(None)
         else:
             embed = await request.get_embed(MessageType.INFO)
-            await self.default_channel.send(f"**Now playing:**", embed=embed)
+            await self.get_text_channel_from_current_media().send(f"**Now playing:**", embed=embed)
             self.media_manager.get_voice_client().play(stream, after=after_media)
             await self.buffer_for_seconds(1.0)
 
@@ -344,7 +308,7 @@ class Media(commands.Cog):
     async def service_search(self, command: Command):
         service = command.get_part(1).lower()
         keywords = command.get_command_from(2)
-        await self.default_channel.send(f"**Conducting search in `{service}` for `{keywords}`. Please wait...**")
+        await command.get_channel().send(f"**Conducting search in `{service}` for `{keywords}`. Please wait...**")
         request = None
         async with command.get_channel().typing():
             match service:
@@ -355,7 +319,7 @@ class Media(commands.Cog):
                     request = PlaylistRequest(url, command.get_author(), command.does_arg_exist('opus'))
                     await request.create_metadata()
                 case _:
-                    await self.default_channel.send(embed=Util.create_simple_embed(f"Unknown service. Available search providers are `youtube`.", MessageType.NEGATIVE))
+                    await command.get_channel().send(embed=Util.create_simple_embed(f"Unknown service. Available search providers are `youtube`.", MessageType.NEGATIVE))
             return request
 
 
@@ -391,3 +355,10 @@ class Media(commands.Cog):
             await asyncio.sleep(seconds)
             self.media_manager.get_voice_client().resume()
             print(f"  Resuming...")
+
+    
+    def get_text_channel_from_current_media(self):
+        try:
+            return self.bot.get_channel(Util.DEFAULT_COMMAND_CHANNEL[self.playlist.get_current_guild().id])
+        except:
+            return None

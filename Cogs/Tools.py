@@ -1,7 +1,5 @@
-import asyncio
 import datetime
 import os
-import json
 import discord
 from discord.ext import commands
 from Bot.Quote import Quote
@@ -9,48 +7,17 @@ from Command import Command
 from Util import MessageType, Util
 
 class Tools(commands.Cog):
-    CONFIRMATION_TIME = 20.0 # seconds
-    DEFAULT_TEXT_CHANNEL: dict[int, int] = {} # [key=guild id, val=channel id]
-    possible_channel_names: list
     
+    possible_channel_names: list
     bot: discord.Bot
 
-    def __init__(self, bot, channel_names):
+    def __init__(self, bot):
         self.bot = bot
-        self.possible_channel_names = channel_names
 
-    # on startup
+
     @commands.Cog.listener()
     async def on_ready(self):
-        print(f"We have logged in as {self.bot.user}")
-
-        for guild in self.bot.guilds:
-            temp_default_channel = guild.system_channel
-
-            # attempt to find default command channel
-            for channel in guild.text_channels:
-                if channel.permissions_for(guild.me).send_messages:
-                    if channel.name in self.possible_channel_names:
-                        temp_default_channel = channel
-            
-            # assign to a fallback channel if bot channel not found
-            if temp_default_channel == None:
-                print(f"No bot command channel found for {guild.name}, finding default")
-                temp_default_channel = guild.system_channel
-                if temp_default_channel and temp_default_channel.permissions_for(guild.me).send_messages:
-                    temp_default_channel = channel
-
-            if temp_default_channel == None:
-                print('WARNING, no default command channel is accessible. This bot will not have full functionality.')
-
-            # assign command channel with the server
-            Tools.DEFAULT_TEXT_CHANNEL[guild.id] = temp_default_channel.id
-            print(f"Initialized for '{guild.name}' with channel={temp_default_channel}")
-        print("READY!")
-
-        # list of subscription functions
-        self.bot.dispatch('earthquake_global_watcher')
-        self.bot.dispatch('earthquake_pacific_watcher')
+        print(f"READY! Initialized Tools cog.'")
 
 
     # #####################################
@@ -58,7 +25,7 @@ class Tools(commands.Cog):
     # #####################################
 
     def is_command_channel(self, command: Command):
-        return isinstance(command.get_channel(), discord.channel.DMChannel) or command.get_channel().id == Tools.DEFAULT_TEXT_CHANNEL[command.get_guild().id]
+        return isinstance(command.get_channel(), discord.channel.DMChannel) or command.get_channel().id == Util.DEFAULT_COMMAND_CHANNEL[command.get_guild().id]
     
 
     def is_admin_author(self, command: Command):

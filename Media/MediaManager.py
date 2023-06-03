@@ -30,6 +30,9 @@ class MediaManager:
     def get_voice_channel(self):
         return self.__current_voice_channel
     
+    def get_current_voice_guild(self):
+        return self.__voice_client.guild
+    
     def set_voice_channel(self, channel):
         self.__current_voice_channel = channel
 

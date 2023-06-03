@@ -55,6 +55,9 @@ class PlaylistRequest:
     def get_requester(self):
         return self.__author
     
+    def get_guild(self):
+        return self.__author.guild
+    
     def update_requester(self, new_author: discord.Member | discord.User):
         self.__author = new_author
         self.__time = datetime.datetime.now()
@@ -85,5 +88,11 @@ class PlaylistRequest:
         embed.set_footer(text=f"Requested by {self.get_requester().display_name} on {self.get_request_time().strftime('%A, %I:%M:%S %p')} (Opus:{self.use_opus()})")
         return embed
     
+
+    async def get_playlist_summary(self) -> str:
+        meta = await self.get_metadata()
+        return f"*{meta.title}* by *{meta.author}* in `{self.get_guild()}` ({meta.runtime})"
+    
+
     def __str__(self) -> str:
         return f"`{self.__raw_source} requested by {self.__author.name}, {self.__time.strftime('%A, %b %d, %I:%M:%S.%f %p %Z')})`"

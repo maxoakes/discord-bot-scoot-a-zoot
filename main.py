@@ -26,17 +26,20 @@ if os.getenv('IS_DEV') in Util.AFFIRMATIVE_RESPONSE:
     token = os.getenv('DEV_TOKEN')
 
 # run the appropriate bot
+command_channels = []
 if input_string in ['media', 'dj', 'player']:
     token = os.getenv('DJ_TOKEN') if not token else token
-    bot.add_cog(Media(bot, ['jukebox', 'music-requests', 'dj-requests'], 0))
+    command_channels = ['jukebox', 'music-requests', 'dj-requests']
+    bot.add_cog(Media(bot))
 
 elif input_string in ['bot', 'chat', 'net', 'text']:
     token = os.getenv('BOT_TOKEN') if not token else token
-    bot.add_cog(Tools(bot, ['bot-spam', 'bot-commands', 'botspam']))
+    command_channels = ['bot-spam', 'bot-commands', 'botspam']
+    bot.add_cog(Tools(bot))
     bot.add_cog(Events(bot))
 
 if token:
-    bot.add_cog(Global(bot))
+    bot.add_cog(Global(bot, command_channels))
     bot.run(token)
 else:
     print('No valid input was given. Exiting.')

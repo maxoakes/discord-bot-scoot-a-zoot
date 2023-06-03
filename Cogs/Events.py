@@ -26,11 +26,10 @@ class Events(commands.Cog):
 
     @commands.Cog.listener()
     async def on_ready(self):
-        print("In Events.py on_ready listener")
-
         # list of subscription functions
         self.bot.dispatch('earthquake_global_watcher')
         self.bot.dispatch('earthquake_pacific_watcher')
+        print(f"READY! Initialized Events cog.'")
 
 
     # #####################################
@@ -38,7 +37,7 @@ class Events(commands.Cog):
     # #####################################
 
     def is_command_channel(self, command: Command):
-        return isinstance(command.get_channel(), discord.channel.DMChannel) or command.get_channel().id == Tools.DEFAULT_TEXT_CHANNEL[command.get_guild().id]
+        return isinstance(command.get_channel(), discord.channel.DMChannel) or command.get_channel().id == Util.DEFAULT_COMMAND_CHANNEL[command.get_guild().id]
     
 
     def is_admin_author(self, command: Command):
