@@ -46,6 +46,9 @@ class Quote:
             self.__location = location
             self.__time = time
     
+    def get_creator(self):
+        return self.__creator
+
     def is_bad(self):
         return self.__quote == None
     

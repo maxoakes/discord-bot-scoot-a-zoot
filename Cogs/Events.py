@@ -29,7 +29,7 @@ class Events(commands.Cog):
         # list of subscription functions
         self.bot.dispatch('earthquake_global_watcher')
         self.bot.dispatch('earthquake_pacific_watcher')
-        print(f"READY! Initialized Events cog.'")
+        print(f"READY! Initialized Events cog.")
 
 
     # #####################################
@@ -100,6 +100,7 @@ class Events(commands.Cog):
 
                 channel_string = command.get_channel()
                 await command.get_channel().send(embed=Util.create_simple_embed(f'Successfully performed {action_string} on channel {channel_string} for {event_type.value}'))
+                await Util.write_dev_log(self.bot, f'{command.get_guild()}/{channel_string} did `{action_string}` on {event_type.value}.')
 
             except ValueError as v:
                 print(f'No such channel is subscribed to that event: {v}')

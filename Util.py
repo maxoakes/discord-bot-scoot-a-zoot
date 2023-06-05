@@ -32,22 +32,38 @@ class Util:
     FILE_PROTOCOL_PREFIX = "file://"
     T = datetime.datetime.now().timestamp()
     
-    __env_loaded = False
     __command_char = '>>'
     __author_mention = 'Author Unspecified'
+    __dev_channel_id = None
     
+
     def get_command_char():
-        if not Util.__env_loaded:
-            load_dotenv()
-            Util.__command_char = os.getenv('COMMAND_CHAR')
+        load_dotenv()
+        Util.__command_char = os.getenv('COMMAND_CHAR')
         return Util.__command_char
 
 
     def get_author_mention():
-        if not Util.__env_loaded:
-            load_dotenv()
-            Util.__author_mention = os.getenv('AUTHOR_MENTION')
+        load_dotenv()
+        Util.__author_mention = os.getenv('AUTHOR_MENTION')
         return Util.__author_mention
+    
+
+    def get_dev_channel_id():
+        load_dotenv()
+        Util.__dev_channel_id = os.getenv('DEV_LOG_OUTPUT_CHANNEL')
+        return Util.__dev_channel_id
+
+
+    async def write_dev_log(bot: discord.Bot, text: str, embed: discord.Embed | None=None):
+        load_dotenv()
+        channel = bot.get_channel(int(Util.get_dev_channel_id()))
+        if not channel:
+            print('Cannot find dev channel. Nothing will be written.')
+            return
+        await channel.send(content=text, embed=embed)
+        embed_text = embed.description if embed else ''
+        print(f'Log output to {channel.guild}/{channel.name}:\t text:"{text}", embed:"{embed_text}"')
 
 
     async def broadcast(bot: discord.Bot, text: str, embed: discord.Embed):

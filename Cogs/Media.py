@@ -22,7 +22,7 @@ class Media(commands.Cog):
 
     @commands.Cog.listener()
     async def on_ready(self):
-        print(f"READY! Initialized Media cog.'")
+        print(f"READY! Initialized Media cog.")
 
 
     # #####################################
@@ -209,7 +209,9 @@ class Media(commands.Cog):
     # Media controller
     # #####################################
 
-    async def update_playlist_pointer(self):
+    async def update_playlist_pointer(self, prev_error):
+        if prev_error:
+            await Util.write_dev_log(self.bot, f'Error `{prev_error}` playing media `{self.playlist.get_now_playing().get_source_string()}`')
         self.media_manager.get_voice_client().stop()
         channel = self.get_text_channel_from_current_media()
         match self.playlist.get_requested_action():           
@@ -243,7 +245,7 @@ class Media(commands.Cog):
         
         # cancel this media and move to next if the author not known for some reason
         if not request.get_requester():
-            print(f"Requester is not known. Cannot follow! {request}")
+            await Util.write_dev_log(self.bot, f'Media requester is not known. Cannot follow! `{request}`')
             self.playlist.iterate_queue()
             return
 
@@ -280,7 +282,7 @@ class Media(commands.Cog):
         # define what to do when the track ends
         def after_media(error):
             print(f'Ended stream for with error: {error}')
-            self.media_manager.media_loop.create_task(self.update_playlist_pointer())
+            self.media_manager.media_loop.create_task(self.update_playlist_pointer(error))
         
         # play the stream
         source_string = await request.get_playable_url()
@@ -288,6 +290,7 @@ class Media(commands.Cog):
         
         if not stream or not source_string:
             # if something bad really happens, skip this track
+            await Util.write_dev_log(self.bot, f'Bad source: `{request}`')
             try:
                 await self.get_text_channel_from_current_media().send(embed=Util.create_simple_embed('Bad source. Exiting.', MessageType.FATAL))
             except:

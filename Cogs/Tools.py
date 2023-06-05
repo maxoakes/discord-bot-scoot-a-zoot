@@ -17,7 +17,7 @@ class Tools(commands.Cog):
 
     @commands.Cog.listener()
     async def on_ready(self):
-        print(f"READY! Initialized Tools cog.'")
+        print(f"READY! Initialized Tools cog.")
 
 
     # #####################################
@@ -93,6 +93,7 @@ class Tools(commands.Cog):
                 if response.content.lower().strip() in Util.AFFIRMATIVE_RESPONSE and command.get_author().id == response.author.id:
                     # TODO implement insert query to local DB
                     await command.get_message().channel.send(content=f'{command.get_author().mention}, (Not implemented) this quote has been added to the database:')
+                    await Util.write_dev_log(self.bot, f'A quote was added to the database by {quote.get_creator()}.')
                 else:
                     await command.get_message().channel.send(content=f'{command.get_author().mention}, no affirmative response was provided. This quote will **not** be added to the database:')
 
@@ -117,7 +118,8 @@ class Tools(commands.Cog):
 
         address = command.get_command_from(1)
         param = 'ftb.ckwgaming.com' if address == '' else address
-        (response, mime, code) = await Util.http_get_thinking(f'https://api.mcsrvstat.us/2/{param}', context)
+        query_url = f'https://api.mcsrvstat.us/2/{param}'
+        (response, mime, code) = await Util.http_get_thinking(query_url, context)
 
         if (Tools.print_debug_if_needed(command, response)):
             return
@@ -156,6 +158,7 @@ class Tools(commands.Cog):
             
         else: # server error 500 or something else unknown
             await command.get_channel().send(embed=Util.create_simple_embed(f'Something went wrong while getting a response. ({code})', MessageType.FATAL))
+            await Util.write_dev_log(self.bot, f'{code} error on {command.get_guild()} requesting `{query_url}`')
 
 
     @commands.command(name='bored', hidden=False, 
@@ -178,7 +181,8 @@ class Tools(commands.Cog):
         if command.does_arg_exist('free'):
             options = options + f'minprice=0&maxprice=0'
 
-        (response, mime, code) = await Util.http_get_thinking(f'http://www.boredapi.com/api/activity?{options}', context)
+        query_url = f'http://www.boredapi.com/api/activity?{options}'
+        (response, mime, code) = await Util.http_get_thinking(query_url, context)
 
         if (Tools.print_debug_if_needed(command, response)):
             return
@@ -199,7 +203,7 @@ class Tools(commands.Cog):
             
         else: # server error 500 or something else unknown
             await command.get_channel().send(embed=Util.create_simple_embed(f'Something went wrong while getting a response. If you are bored, help debug the issue. ({code})', MessageType.FATAL))
-
+            await Util.write_dev_log(self.bot, f'{code} error on {command.get_guild()} requesting `{query_url}`')
 
     # https://dictionaryapi.dev/
     @commands.command(name='word', hidden=False, aliases=['dict', 'dictionary', 'def', 'define'],
@@ -213,7 +217,8 @@ class Tools(commands.Cog):
             return
         
         word = command.get_command_from(1)
-        (response, mime, code) = await Util.http_get_thinking(f'https://api.dictionaryapi.dev/api/v2/entries/en/{word}', context)
+        query_url = f'https://api.dictionaryapi.dev/api/v2/entries/en/{word}'
+        (response, mime, code) = await Util.http_get_thinking(query_url, context)
 
         if (Tools.print_debug_if_needed(command, response)):
             return
@@ -250,6 +255,7 @@ class Tools(commands.Cog):
             
         else: # server error 500 or something else unknown
             await command.get_channel().send(embed=Util.create_simple_embed(f'Something went wrong while getting a response. ({code})', MessageType.FATAL))
+            await Util.write_dev_log(self.bot, f'{code} error on {command.get_guild()} requesting `{query_url}`')
 
 
     # https://color.serialif.com/#anchor-request
@@ -265,26 +271,26 @@ class Tools(commands.Cog):
             return
         
         value_type = command.get_part(1)
-        query_string = 'https://color.serialif.com/'
+        query_url = 'https://color.serialif.com/'
 
         # parse command for color components
         # if it is a color code of ints
         if value_type in ['rgb', 'hsl', 'hsl']:
             values = (command.get_part(2), command.get_part(3), command.get_part(4))
-            query_string = query_string + f'{value_type}={values[0]},{values[1]},{values[2]}'
+            query_url = query_url + f'{value_type}={values[0]},{values[1]},{values[2]}'
         # if it is a name for a color
         elif value_type in ['name', 'word', 'keyword']:
-            query_string = query_string + f'keyword={command.get_command_from(2)}'
+            query_url = query_url + f'keyword={command.get_command_from(2)}'
         # if it is a hex or hex alpha
         elif value_type in ['hex']:
-            query_string = query_string + f'{command.get_part(2).replace("0x", "").replace("#", "")}'
+            query_url = query_url + f'{command.get_part(2).replace("0x", "").replace("#", "")}'
         # if the input params were bad
         else:
             await command.get_channel().send(embed=Util.create_simple_embed(f"Not a valid input. See `>>help color`", MessageType.NEGATIVE))
             return
 
         # when everything is all good, make the request
-        (response, mime, code) = await Util.http_get_thinking(query_string, context)
+        (response, mime, code) = await Util.http_get_thinking(query_url, context)
         status = response.get('status')
 
         if (Tools.print_debug_if_needed(command, response)):
@@ -332,6 +338,7 @@ class Tools(commands.Cog):
             await command.get_channel().send(embed=Util.create_simple_embed(f"Got an error response. Perhaps it was not a valid color. Message: {response.get('error', {}).get('message')}", MessageType.NEGATIVE))
         else:
             await command.get_channel().send(embed=Util.create_simple_embed(f"Unknown error. Is the endpoint server down? ({code}): {response}", MessageType.FATAL))
+            await Util.write_dev_log(self.bot, f'{code} ({response}) error on {command.get_guild()} requesting `{query_url}`')
 
 
     # https://corporatebs-generator.sameerkumar.website/
@@ -344,7 +351,8 @@ class Tools(commands.Cog):
             print(f'{command.get_part(0)} failed check. Aborting.')
             return
         
-        (response, mime, code) = await Util.http_get_thinking('https://corporatebs-generator.sameerkumar.website/', context)
+        query_url = 'https://corporatebs-generator.sameerkumar.website/'
+        (response, mime, code) = await Util.http_get_thinking(query_url, context)
 
         if (Tools.print_debug_if_needed(command, response)):
             return
@@ -359,6 +367,7 @@ class Tools(commands.Cog):
             
         else: # server error 500 or something else unknown
             await command.get_channel().send(embed=Util.create_simple_embed(f'Something went wrong while getting a response. ({code})', MessageType.FATAL))
+            await Util.write_dev_log(self.bot, f'{code} error on {command.get_guild()} requesting `{query_url}`')
 
 
     # https://uselessfacts.jsph.pl/
@@ -373,7 +382,8 @@ class Tools(commands.Cog):
             return
         
         suffix = '?language=de' if command.does_arg_exist('de') else ''
-        (response, mime, code) = await Util.http_get_thinking(f'https://uselessfacts.jsph.pl/api/v2/facts/random{suffix}', context)
+        query_url = f'https://uselessfacts.jsph.pl/api/v2/facts/random{suffix}'
+        (response, mime, code) = await Util.http_get_thinking(query_url, context)
 
         if (Tools.print_debug_if_needed(command, response)):
             return
@@ -387,6 +397,7 @@ class Tools(commands.Cog):
             
         else: # server error 500 or something else unknown
             await command.get_channel().send(embed=Util.create_simple_embed(f'Something went wrong while getting a response. ({code})', MessageType.FATAL))
+            await Util.write_dev_log(self.bot, f'{code} error on {command.get_guild()} requesting `{query_url}`')
 
 
     # https://v2.jokeapi.dev/
@@ -430,8 +441,8 @@ class Tools(commands.Cog):
         if input_search:
             search_string = f'contains={input_search}&'
 
-        query_string = f'https://v2.jokeapi.dev/joke/{categories_string}?{lang_string}{blacklist_string}{search_string}'
-        (response, mime, code) = await Util.http_get_thinking(query_string, context)
+        query_url = f'https://v2.jokeapi.dev/joke/{categories_string}?{lang_string}{blacklist_string}{search_string}'
+        (response, mime, code) = await Util.http_get_thinking(query_url, context)
 
         if (Tools.print_debug_if_needed(command, response)):
             return
@@ -457,6 +468,7 @@ class Tools(commands.Cog):
             
         else: # server error 500 or something else unknown
             await command.get_channel().send(embed=Util.create_simple_embed(f'Something went wrong while getting a response. ({code})', MessageType.FATAL))
+            await Util.write_dev_log(self.bot, f'{code} error on {command.get_guild()} requesting `{query_url}`')
 
 
     # https://geokeo.com/
@@ -476,7 +488,8 @@ class Tools(commands.Cog):
             await command.get_channel().send(embed=Util.create_simple_embed(f'Enter any search parameter.', MessageType.NEGATIVE))
             return
         
-        (response, mime, code) = await Util.http_get_thinking(f'https://geokeo.com/geocode/v1/search.php?q={input_string}?&api={os.getenv("GEOKEO_TOKEN")}', context)
+        query_url = f'https://geokeo.com/geocode/v1/search.php?q={input_string}?&api={os.getenv("GEOKEO_TOKEN")}'
+        (response, mime, code) = await Util.http_get_thinking(query_url, context)
         status = response.get('status', 'ok')
 
         if (Tools.print_debug_if_needed(command, response)):
@@ -508,6 +521,7 @@ class Tools(commands.Cog):
 
         else:
             await command.get_channel().send(embed=Util.create_simple_embed(f'Unknown error processing request. Status: ({status})', MessageType.FATAL))
+            await Util.write_dev_log(self.bot, f'{code} ({status}) error on {command.get_guild()} requesting `{query_url}`')
 
 
     @commands.command(name='ip', hidden=False,
@@ -525,7 +539,8 @@ class Tools(commands.Cog):
             await command.get_channel().send(embed=Util.create_simple_embed(f'Enter an IPv4 address as a parameter.', MessageType.NEGATIVE))
             return
         
-        (response, mime, code) = await Util.http_get_thinking(f'https://api.techniknews.net/ipgeo/{ip}', context)
+        query_url = f'https://api.techniknews.net/ipgeo/{ip}'
+        (response, mime, code) = await Util.http_get_thinking(query_url, context)
         status = response.get('status', 'success')
         if (Tools.print_debug_if_needed(command, response)):
             return
@@ -562,6 +577,7 @@ class Tools(commands.Cog):
                 await command.get_channel().send(embed=Util.create_simple_embed(f'Not a valid IPv4 address. Message: ({response.get("message")})', MessageType.NEGATIVE))
             else:
                 await command.get_channel().send(embed=Util.create_simple_embed(f'Unknown error. Message: ({response.get("message")}), ({code})', MessageType.FATAL))
+                await Util.write_dev_log(self.bot, f'{code} ({response.get("message")}) error on {command.get_guild()} requesting `{query_url}`')
 
 
     # https://newton.vercel.app/
@@ -585,7 +601,8 @@ class Tools(commands.Cog):
             await command.get_channel().send(embed=Util.create_simple_embed(f'Enter a valid operation and expression.', MessageType.NEGATIVE))
             return
         
-        (response, mime, code) = await Util.http_get_thinking(f'https://newton.now.sh/api/v2/{operation}/{expression}', context)
+        query_url = f'https://newton.now.sh/api/v2/{operation}/{expression}'
+        (response, mime, code) = await Util.http_get_thinking(query_url, context)
         
         if (Tools.print_debug_if_needed(command, response)):
             return
@@ -600,6 +617,7 @@ class Tools(commands.Cog):
             
         else: # server error 500 or something else unknown
             await command.get_channel().send(embed=Util.create_simple_embed(f'Something went wrong while getting a response. ({code})', MessageType.FATAL))
+            await Util.write_dev_log(self.bot, f'{code} error on {command.get_guild()} requesting `{query_url}`')
 
 
     # https://docs.aviationapi.com/#tag/airports
@@ -618,7 +636,8 @@ class Tools(commands.Cog):
             await command.get_channel().send(embed=Util.create_simple_embed(f'Not a valid input. Consult `>>help airport` for help.', MessageType.NEGATIVE))
             return
 
-        (response, mime, code) = await Util.http_get_thinking(f'https://api.aviationapi.com/v1/airports?apt={param}', context)
+        query_url = f'https://api.aviationapi.com/v1/airports?apt={param}'
+        (response, mime, code) = await Util.http_get_thinking(query_url, context)
         
         if (Tools.print_debug_if_needed(command, response)):
             return
@@ -666,6 +685,7 @@ class Tools(commands.Cog):
             
         else: # server error 500 or something else unknown
             await command.get_channel().send(embed=Util.create_simple_embed(f'Something went wrong while getting a response. ({code})', MessageType.FATAL))
+            await Util.write_dev_log(self.bot, f'{code} error on {command.get_guild()} requesting `{query_url}`')
 
 
     # https://openweathermap.org/current
@@ -687,7 +707,8 @@ class Tools(commands.Cog):
 
         search_query = 'q=' if method == 'city' else 'zip='
         search_query = search_query + param
-        (response, mime, code) = await Util.http_get_thinking(f'https://api.openweathermap.org/data/2.5/weather?{search_query}&units=imperial&appid={os.getenv("OPENWEATHER_TOKEN")}', context)
+        query_url = f'https://api.openweathermap.org/data/2.5/weather?{search_query}&units=imperial&appid={os.getenv("OPENWEATHER_TOKEN")}'
+        (response, mime, code) = await Util.http_get_thinking(query_url, context)
         
         if (Tools.print_debug_if_needed(command, response)):
             return
@@ -758,6 +779,7 @@ class Tools(commands.Cog):
             
         else: # server error 500 or something else unknown
             await command.get_channel().send(embed=Util.create_simple_embed(f'Something went wrong while getting a response. ({code})', MessageType.FATAL))
+            await Util.write_dev_log(self.bot, f'{code} error on {command.get_guild()} requesting `{query_url}`')
 
 
     # #####################################
