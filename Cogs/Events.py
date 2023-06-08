@@ -36,12 +36,8 @@ class Events(commands.Cog):
     # Manual Checks (does not use built-in cog command checks)
     # #####################################
 
-    def is_command_channel(self, command: Command):
-        return isinstance(command.get_channel(), discord.channel.DMChannel) or command.get_channel().id == Util.DEFAULT_COMMAND_CHANNEL[command.get_guild().id]
-    
-
-    def is_admin_author(self, command: Command):
-        return True
+    def is_command_channel(self, context: commands.Context):
+        return isinstance(context.channel, discord.channel.DMChannel) or context.channel.id == Util.DEFAULT_COMMAND_CHANNEL[context.guild.id]
 
 
     # #####################################
@@ -54,7 +50,7 @@ class Events(commands.Cog):
         description='Subscribe or unsubscribe the channel from an event tracker')
     async def command_event(self, context: commands.Context):
         command = Command(context.message)
-        if not (self.is_command_channel(command) and self.is_admin_author(command)):
+        if not context.channel.permissions_for(context.author).manage_channels:
             print(f'{command.get_part(0)} failed check. Aborting.')
             return
         

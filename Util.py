@@ -139,6 +139,16 @@ class Util:
         return code >= 500 and code < 600
     
 
+    def sanitize_file_name(input_name: str) -> str:
+        invalid_chars = '#%&{}/$! \":<>*?/+`|=\\@' + "'"
+        output_name = input_name
+        for char in invalid_chars:
+            output_name = output_name.replace(char, '')
+        while output_name.find('-') == 0 or output_name.find('.') == 0 or output_name.find('_') == 0:
+            output_name = output_name[1:]
+        return output_name
+    
+
     # #####################################
     # Debug
     # #####################################

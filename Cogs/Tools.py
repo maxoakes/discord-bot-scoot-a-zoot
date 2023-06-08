@@ -26,13 +26,9 @@ class Tools(commands.Cog):
     # Manual Checks (does not use built-in cog command checks)
     # #####################################
 
-    def is_command_channel(self, command: Command):
-        return isinstance(command.get_channel(), discord.channel.DMChannel) or command.get_channel().id == Util.DEFAULT_COMMAND_CHANNEL[command.get_guild().id]
+    def is_command_channel(self, context: commands.Context):
+        return isinstance(context.channel, discord.channel.DMChannel) or context.channel.id == Util.DEFAULT_COMMAND_CHANNEL[context.guild.id]
     
-
-    def is_admin_author(self, command: Command):
-        return True
-
 
     # #####################################
     # Commands
@@ -41,14 +37,15 @@ class Tools(commands.Cog):
     @commands.command(name='clear', aliases=['cls'], hidden=True, 
         brief='Delete and archive all messages in this channel',
         usage='(--limit=<integer>)',
-        description='Delete and archive all messages in this channel. Enter an upper limit to delete only a set number of messages. 1 hour cooldown per channel')
-    @commands.cooldown(1, 3600, commands.BucketType.channel)
+        description='Delete and archive all messages in this channel. Enter an upper limit to delete only a set number of messages. 2 hour cooldown per channel')
+    @commands.cooldown(1, 7200, commands.BucketType.default)
     async def command_clear(self, context: commands.Context):
         command = Command(context.message)
         limit = command.get_arg('limit') or 1000
         limit = int(limit) if limit else limit
-        if not (self.is_admin_author(command)):
-            print(f'{command.get_part(0)} failed check. Aborting.')
+        if not (context.channel.permissions_for(context.author).manage_messages):
+            await command.get_channel().send('You do not have permissions to manage messages.')
+            print(f'{command.get_part(0)} failed permission check. Aborting.')
             return
         
         await command.get_channel().send('Cleaning up channel. Please wait. This could take a while...')
@@ -58,8 +55,11 @@ class Tools(commands.Cog):
         messages = MessageDump(first_datetime, recent_timestamp, context.guild, context.channel, raw_messages)
 
         import json
+        output_file_path = ''
         try:
-            with open(fr"logs/message_dump_{datetime.datetime.now().timestamp()}.json", "w") as file:
+            output_file_name = Util.sanitize_file_name(f'messages_{context.guild.name}_{context.channel.name}_{round(datetime.datetime.now().timestamp())}')
+            output_file_path = fr"logs/{output_file_name}.json"
+            with open(output_file_path, "w") as file:
                 json.dump(messages.get_dict(), file, indent=4)
             print("Channel message dump file written")
         except Exception as e:
@@ -83,7 +83,8 @@ class Tools(commands.Cog):
                 await Util.write_dev_log(self.bot, f'Got an error when trying to cleanup channel {context.guild}/{context.channel}: {e}')
                 pass
         print('Done!')
-        await command.get_channel().send(f'Deleted messages between {first_datetime.strftime("%d/%m/%Y, %H:%M:%S")} and {recent_timestamp.strftime("%d/%m/%Y, %H:%M:%S")}.')
+        attachment = discord.File(output_file_path)
+        await command.get_channel().send(f'Deleted messages between {first_datetime.strftime("%d/%m/%Y, %H:%M:%S")} and {recent_timestamp.strftime("%d/%m/%Y, %H:%M:%S")}. Attached is the archive.', file=attachment)
 
 
     @commands.command(name='quote', aliases=['q'], hidden=False, 
@@ -91,9 +92,9 @@ class Tools(commands.Cog):
         usage='<direct [quote in quotations] -[author](, time)(, location) OR <add --quote=[quote without quotations] (--author=[author]) (--location=[location]) (--time=[time])>',
         description='Create a quote to add it to the database')
     async def command_quote(self, context: commands.Context):
-        command = Command(context.message)
-        if not (self.is_command_channel(command) and self.is_admin_author(command)):
-            print(f'{command.get_part(0)} failed check. Aborting.')
+        command = Command(context.message)        
+        if not (self.is_command_channel(context) and context.channel.permissions_for(context.author).kick_members): # kicking seems like an appropriate equivalent trust level
+            print(f'{command.get_part(0)} failed permission check. Aborting.')
             return
 
         def check_channel_response(m): # checking if it's the same user and channel
@@ -162,7 +163,7 @@ class Tools(commands.Cog):
         description='Get the status of a Minecraft server. If the server is online, get all significant information.')
     async def command_minecraft(self, context: commands.Context):
         command = Command(context.message)
-        if not self.is_command_channel(command):
+        if not self.is_command_channel(context):
             print(f'{command.get_part(0)} failed check. Aborting.')
             return
 
@@ -217,7 +218,7 @@ class Tools(commands.Cog):
         description='Get a suggestion for something to do')
     async def command_bored(self, context: commands.Context):
         command = Command(context.message)
-        if not self.is_command_channel(command):
+        if not self.is_command_channel(context):
             print(f'{command.get_part(0)} failed check. Aborting.')
             return
         
@@ -262,7 +263,7 @@ class Tools(commands.Cog):
         description='Get the definition(s) of a word')
     async def command_word(self, context: commands.Context):
         command = Command(context.message)
-        if not self.is_command_channel(command):
+        if not self.is_command_channel(context):
             print(f'{command.get_part(0)} failed check. Aborting.')
             return
         
@@ -316,7 +317,7 @@ class Tools(commands.Cog):
         description='Enter a color for its RGB, HSL, hex values and closest name')
     async def command_color(self, context: commands.Context):
         command = Command(context.message)
-        if not self.is_command_channel(command):
+        if not self.is_command_channel(context):
             print(f'{command.get_part(0)} failed check. Aborting.')
             return
         
@@ -397,7 +398,7 @@ class Tools(commands.Cog):
         description='Generate a buzzword tech phrase')
     async def command_buzz(self, context: commands.Context):
         command = Command(context.message)
-        if not self.is_command_channel(command):
+        if not self.is_command_channel(context):
             print(f'{command.get_part(0)} failed check. Aborting.')
             return
         
@@ -427,7 +428,7 @@ class Tools(commands.Cog):
         description='Generate a random fun-fact. Also supports results in German.')
     async def command_fact(self, context: commands.Context):
         command = Command(context.message)
-        if not self.is_command_channel(command):
+        if not self.is_command_channel(context):
             print(f'{command.get_part(0)} failed check. Aborting.')
             return
         
@@ -457,7 +458,7 @@ class Tools(commands.Cog):
         description='Get a joke. Use --flags to blacklist types of jokes. Not specifying a category will yield any type of joke.')
     async def command_joke(self, context: commands.Context):
         command = Command(context.message)
-        if not self.is_command_channel(command):
+        if not self.is_command_channel(context):
             print(f'{command.get_part(0)} failed check. Aborting.')
             return
 
@@ -528,7 +529,7 @@ class Tools(commands.Cog):
         description='Get geographical information from an input')
     async def command_geo(self, context: commands.Context):
         command = Command(context.message)
-        if not self.is_command_channel(command):
+        if not self.is_command_channel(contexxt):
             print(f'{command.get_part(0)} failed check. Aborting.')
             return
         
@@ -580,7 +581,7 @@ class Tools(commands.Cog):
         description='Get (possibly) correct location statistics from an IPv4 address')
     async def command_ip(self, context: commands.Context):
         command = Command(context.message)
-        if not self.is_command_channel(command):
+        if not self.is_command_channel(context):
             print(f'{command.get_part(0)} failed check. Aborting.')
             return
         
@@ -637,7 +638,7 @@ class Tools(commands.Cog):
         description='Do some math')
     async def command_math(self, context: commands.Context):
         command = Command(context.message)
-        if not self.is_command_channel(command):
+        if not self.is_command_channel(context):
             print(f'{command.get_part(0)} failed check. Aborting.')
             return
         
@@ -677,7 +678,7 @@ class Tools(commands.Cog):
         description='Get basic airport statistics given a code')
     async def command_airport(self, context: commands.Context):
         command = Command(context.message)
-        if not self.is_command_channel(command):
+        if not self.is_command_channel(context):
             print(f'{command.get_part(0)} failed check. Aborting.')
             return
         
@@ -745,7 +746,7 @@ class Tools(commands.Cog):
         description='Get the current weather for a location')
     async def command_weather(self, context: commands.Context):
         command = Command(context.message)
-        if not self.is_command_channel(command):
+        if not self.is_command_channel(context):
             print(f'{command.get_part(0)} failed check. Aborting.')
             return
         

@@ -29,12 +29,8 @@ class Media(commands.Cog):
     # Manual Checks (does not use built-in cog command checks)
     # #####################################
 
-    def is_command_channel(self, command: Command):
-        return isinstance(command.get_channel(), discord.channel.DMChannel) or command.get_channel().id == Util.DEFAULT_COMMAND_CHANNEL[command.get_guild().id]
-    
-
-    def is_admin_author(self, command: Command):
-        return True
+    def is_command_channel(self, context: commands.Context):
+        return isinstance(context.channel, discord.channel.DMChannel) or context.channel.id == Util.DEFAULT_COMMAND_CHANNEL[context.guild.id]
 
 
     # #####################################
@@ -44,7 +40,7 @@ class Media(commands.Cog):
     @commands.command(name='search', aliases=['lookup', 'query'], hidden=False, brief='Search a service for some media')
     async def command_search(self, context: commands.Context):
         command = Command(context.message)
-        if not self.is_command_channel(command):
+        if not self.is_command_channel(context):
             print(f'{command.get_part(0)} failed check. Aborting.')
             return
         
@@ -59,7 +55,7 @@ class Media(commands.Cog):
     @commands.command(name='stream', aliases=['add', 'listen', 'queue'], hidden=False, brief='Add a specific URL to the playlist queue')
     async def command_stream(self, context: commands.Context):
         command = Command(context.message)
-        if not self.is_command_channel(command):
+        if not self.is_command_channel(context):
             print(f'{command.get_part(0)} failed check. Aborting.')
             return
         
@@ -100,7 +96,7 @@ class Media(commands.Cog):
     @commands.command(name='playlist', aliases=['pl'], hidden=False, brief='Show the playlist queue')
     async def command_playlist(self, context: commands.Context):
         command = Command(context.message)
-        if not self.is_command_channel(command):
+        if not self.is_command_channel(context):
             print(f'{command.get_part(0)} failed check. Aborting.')
             return
         
@@ -111,7 +107,7 @@ class Media(commands.Cog):
     @commands.command(name='skip', aliases=['next', 'pass'], hidden=False, brief='Move forward one media track')
     async def command_skip(self, context: commands.Context):
         command = Command(context.message)
-        if not self.is_command_channel(command):
+        if not self.is_command_channel(context):
             print(f'{command.get_part(0)} failed check. Aborting.')
             return
         
@@ -123,7 +119,7 @@ class Media(commands.Cog):
     @commands.command(name='back', aliases=['prev', 'reverse'], hidden=False, brief='Move back one media track')
     async def command_back(self, context: commands.Context):
         command = Command(context.message)
-        if not self.is_command_channel(command):
+        if not self.is_command_channel(context):
             print(f'{command.get_part(0)} failed check. Aborting.')
             return
         
@@ -137,7 +133,7 @@ class Media(commands.Cog):
     @commands.command(name='end', aliases=['quit', 'close'], hidden=False, brief='Stops media and clears queue')
     async def command_end(self, context: commands.Context):
         command = Command(context.message)
-        if not (self.is_command_channel(command) and self.is_admin_author(command)):
+        if not (self.is_command_channel(context) and context.channel.permissions_for(context.author).manage_messages):
             print(f'{command.get_part(0)} failed check. Aborting.')
             return
         
@@ -149,7 +145,7 @@ class Media(commands.Cog):
     @commands.command(name='pause', aliases=['halt'], hidden=False, brief='Pauses media, does not leave channel')
     async def command_pause(self, context: commands.Context):
         command = Command(context.message)
-        if not self.is_command_channel(command):
+        if not self.is_command_channel(context):
             print(f'{command.get_part(0)} failed check. Aborting.')
             return
         
@@ -160,7 +156,7 @@ class Media(commands.Cog):
     @commands.command(name='resume', aliases=['continue'], hidden=False, brief='Resumes media, if currently paused')
     async def command_resume(self, context: commands.Context):
         command = Command(context.message)
-        if not self.is_command_channel(command):
+        if not self.is_command_channel(context):
             print(f'{command.get_part(0)} failed check. Aborting.')
             return
         
@@ -171,7 +167,7 @@ class Media(commands.Cog):
     @commands.command(name='clear', hidden=False, brief='Clears the playlist queue')
     async def command_clear(self, context: commands.Context):
         command = Command(context.message)
-        if not (self.is_command_channel(command) and self.is_admin_author(command)):
+        if not (self.is_command_channel(context) and context.channel.permissions_for(context.author).manage_messages):
             print(f'{command.get_part(0)} failed check. Aborting.')
             return
         
@@ -186,7 +182,7 @@ class Media(commands.Cog):
     @commands.command(name='presets', aliases=['preset'], hidden=False, brief='Show the list of available media presets')
     async def command_presets(self, context: commands.Context):
         command = Command(context.message)
-        if not self.is_command_channel(command):
+        if not self.is_command_channel(context):
             print(f'{command.get_part(0)} failed check. Aborting.')
             return
         
