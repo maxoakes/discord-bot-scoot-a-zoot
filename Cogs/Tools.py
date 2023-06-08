@@ -1,7 +1,9 @@
+import asyncio
 import datetime
 import os
 import discord
 from discord.ext import commands
+from Bot.MessageDump import MessageDump
 from Bot.Quote import Quote
 from Command import Command
 from Util import MessageType, Util
@@ -35,6 +37,54 @@ class Tools(commands.Cog):
     # #####################################
     # Commands
     # #####################################
+
+    @commands.command(name='clear', aliases=['cls'], hidden=True, 
+        brief='Delete and archive all messages in this channel',
+        usage='(--limit=<integer>)',
+        description='Delete and archive all messages in this channel. Enter an upper limit to delete only a set number of messages. 1 hour cooldown per channel')
+    @commands.cooldown(1, 3600, commands.BucketType.channel)
+    async def command_clear(self, context: commands.Context):
+        command = Command(context.message)
+        limit = command.get_arg('limit') or 1000
+        limit = int(limit) if limit else limit
+        if not (self.is_admin_author(command)):
+            print(f'{command.get_part(0)} failed check. Aborting.')
+            return
+        
+        await command.get_channel().send('Cleaning up channel. Please wait. This could take a while...')
+        raw_messages = await context.channel.history(limit=limit, oldest_first=True).flatten()
+        first_datetime = raw_messages[0].created_at
+        recent_timestamp = raw_messages[-1].created_at
+        messages = MessageDump(first_datetime, recent_timestamp, context.guild, context.channel, raw_messages)
+
+        import json
+        try:
+            with open(fr"logs/message_dump_{datetime.datetime.now().timestamp()}.json", "w") as file:
+                json.dump(messages.get_dict(), file, indent=4)
+            print("Channel message dump file written")
+        except Exception as e:
+            print(f"Failed to write dump: {e}")
+            await command.get_channel().send('Failed creating dump of messages. Exiting command...')
+            return
+
+        print(f'Working to delete messages from {context.guild}/{context.channel.name}...')
+        for message in raw_messages:
+            try:
+                await asyncio.sleep(2.0)
+                print(f'Deleting message {context.guild}/{context.channel} {message.id}')
+                await message.delete(reason='Cleanup via `clean` command.')
+            except discord.Forbidden as e:
+                print('Lack of permissions to delete messages')
+                await command.get_channel().send(f'I do not have permissions to delete messages.')
+                await Util.write_dev_log(self.bot, f'Did not have permissions to cleanup channel in {context.guild}/{context.channel}')
+                return
+            except Exception as e:
+                print(f'Unknown Exception: {e}')
+                await Util.write_dev_log(self.bot, f'Got an error when trying to cleanup channel {context.guild}/{context.channel}: {e}')
+                pass
+        print('Done!')
+        await command.get_channel().send(f'Deleted messages between {first_datetime.strftime("%d/%m/%Y, %H:%M:%S")} and {recent_timestamp.strftime("%d/%m/%Y, %H:%M:%S")}.')
+
 
     @commands.command(name='quote', aliases=['q'], hidden=False, 
         brief='Create a quote from a user',
