@@ -529,7 +529,7 @@ class Tools(commands.Cog):
         description='Get geographical information from an input')
     async def command_geo(self, context: commands.Context):
         command = Command(context.message)
-        if not self.is_command_channel(contexxt):
+        if not self.is_command_channel(context):
             print(f'{command.get_part(0)} failed check. Aborting.')
             return
         

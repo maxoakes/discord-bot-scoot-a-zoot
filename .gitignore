@@ -1,6 +1,5 @@
 .vscode/
 __pycache__/
-EventSubscribers/*
-old/
+Bot/events.json
 logs/
 .env
