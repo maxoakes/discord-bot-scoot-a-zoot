@@ -37,9 +37,9 @@ elif input_string in ['bot', 'chat', 'net', 'text']:
     command_channels = ['bot-spam', 'bot-commands', 'botspam']
     bot.add_cog(Tools(bot))
     bot.add_cog(Events(bot))
+    bot.add_cog(Global(bot, command_channels))
 
 if token:
-    bot.add_cog(Global(bot, command_channels))
     bot.run(token)
 else:
     print('No valid input was given. Exiting.')
