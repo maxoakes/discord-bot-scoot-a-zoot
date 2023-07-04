@@ -151,7 +151,7 @@ class Events(commands.Cog):
         channel_type = context.guild if context.guild else context.channel.type.name
         channel_name = context.channel.name if not isinstance(context.channel, discord.channel.DMChannel) else context.channel.id
         await command.get_channel().send(embed=Util.create_simple_embed(f'Successfully performed {action_string} on {channel_type} channel {channel_name} for `{event_type}`'))
-        await Util.write_dev_log(self.bot, f'{channel_name}/{channel_name} did `{action_string}` on `{event_type}`.')
+        await Util.write_dev_log(self.bot, f'{context.guild.name}/{channel_name} did `{action_string}` on `{event_type}`.')
 
 
     # #####################################
