@@ -30,6 +30,7 @@ command_channels = []
 if input_string in ['media', 'dj', 'player']:
     token = os.getenv('DJ_TOKEN') if not token else token
     command_channels = ['jukebox', 'music-requests', 'dj-requests']
+    bot.add_cog(Global(bot, command_channels))
     bot.add_cog(Media(bot))
 
 elif input_string in ['bot', 'chat', 'net', 'text']:
