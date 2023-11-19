@@ -80,8 +80,8 @@ class Media(commands.Cog):
                     embed=Util.create_simple_embed("An error occurred getting a the media presets, nothing will be added to the queue.", MessageType.FATAL))
                 print(f'Error processing presets file: {e}')
         # if there was no source url or valid preset, it is a bad request
-        if source_string == "" or (source_string.find('http') != 0 and source_string.find('file') != 0):
-            await command.get_channel().send(embed=Util.create_simple_embed(f"Bad input. Must be an `http://`, `https://`, or `file://` protocol, or see the `presets` command", MessageType.NEGATIVE))
+        if source_string == "" or (source_string.find('http') != 0 and source_string.find('file') != 0 and source_string.find('udp') != 0 and source_string.find("rtp") != 0):
+            await command.get_channel().send(embed=Util.create_simple_embed(f"Bad input. Must be an `http://`, `https://`, `udp://` or `file://` protocol, or see the `presets` command", MessageType.NEGATIVE))
             return
         if source_string:
             await command.get_channel().send(f"**Acquiring metadata for `{source_string[:64]}`...**")

@@ -3,6 +3,7 @@ import sys
 import discord
 from discord.ext import commands
 from dotenv import load_dotenv
+from Bot.Quote import Quote
 from Cogs.Events import Events
 from Cogs.Global import Global
 from Util import Util
@@ -37,7 +38,8 @@ elif input_string in ['bot', 'chat', 'net', 'text']:
     token = os.getenv('BOT_TOKEN') if not token else token
     command_channels = ['bot-spam', 'bot-commands', 'botspam']
     bot.add_cog(Tools(bot))
-    bot.add_cog(Events(bot))
+    # bot.add_cog(Quote(bot))
+    # bot.add_cog(Events(bot))
     bot.add_cog(Global(bot, command_channels))
 
 if token:
