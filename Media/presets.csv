@@ -1,9 +1,0 @@
-preset,url,desc,opus
-classical,https://allclassical.streamguys1.com/ac128kmp3,KQOC: Portland AllClassical (or_us),True
-opb,https://stream5.opb.org/2440_64.aac,KOPB Portland: Oregon Public Broadcasting (or_us),True
-kboo,https://live.kboo.fm:8443/high,KBOO Community Radio (or_us),True
-kink,https://live.wostreaming.net/direct/alphacorporate-kinkfmaac-ibc4?source=tunein&source=TuneIn,KINK: Portland Classic Rock (or_us),True
-wcfems,https://broadcastify.cdnstream1.com/1102,Washington County Fire and EMS Live Audio Feed (or_us),False
-wcsd,https://broadcastify.cdnstream1.com/37087,Washington County Sheriff Dispatch Live Audio Feed (or_us),False
-nature,http://air6.amgradio.ru:80/Zvuki,Sounds of Nature (ru),False
-japan1,http://radio.kahoku.net:8000,Kahoku Radio (jp),True

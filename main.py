@@ -1,48 +1,53 @@
 import os
 import sys
-import discord
-from discord.ext import commands
+import re
 from dotenv import load_dotenv
-from Bot.Quote import Quote
-from Cogs.Events import Events
-from Cogs.Global import Global
-from Util import Util
-from Cogs.Media import Media
-from Cogs.Tools import Tools
+from cogs.tools import ToolsCog
+from cogs.primary import PrimaryCog
+from cogs.feeds import FeedCog
+from cogs.media import MediaCog
+from state import Program
 
-intents = discord.Intents.all()
-bot = commands.Bot(command_prefix=Util.get_command_char(), intents=intents)
+def main():
+    # Parse input
+    mode_string = ""
+    command_char = ""
+    if len(sys.argv) == 3:
+        mode_string = sys.argv[1]
+        command_char = sys.argv[2]
+    else:
+        mode_string = input("Which of the following modes will be activated?" 
+                            "\r\n\tm = media"
+                            "\r\n\tt = tools"
+                            "\r\n\tq = quotes"
+                            "\r\n\tr = rss feeds"
+                            "\r\nList the letter code(s) of the desired modes: ")
+        pattern = re.compile("[\W_]+")
+        mode_string = pattern.sub("", mode_string)
+        command_char = input('What character will be used as a prefix to denote commands? ')
+        print(f"Using modes [{mode_string}] with command character [{command_char}]")
 
-# parse input
-input_string = ''
-if len(sys.argv) > 1:
-    input_string = sys.argv[1]
-else:
-    input_string = input('What mode to start? [media|bot]: ').strip().lower()
+    # Initialize settings
+    load_dotenv()
+    control_channel_id = int(os.getenv('CONTROL_CHANNEL'))
+    Program.initialize(command_char, control_channel_id)
 
-# load token string
-load_dotenv()
-token = None
-if os.getenv('IS_DEV') in Util.AFFIRMATIVE_RESPONSE:
-    token = os.getenv('DEV_TOKEN')
+    # Start the bot
+    token = os.getenv('TOKEN')
+    Program.bot.add_cog(PrimaryCog())
+    if "t" in mode_string:
+        Program.bot.add_cog(ToolsCog())
+    if "r" in mode_string:
+        Program.bot.add_cog(FeedCog())
+    if "m" in mode_string:
+        Program.bot.add_cog(MediaCog())
+    Program.bot.run(token)
 
-# run the appropriate bot
-command_channels = []
-if input_string in ['media', 'dj', 'player']:
-    token = os.getenv('DJ_TOKEN') if not token else token
-    command_channels = ['jukebox', 'music-requests', 'dj-requests']
-    bot.add_cog(Global(bot, command_channels))
-    bot.add_cog(Media(bot))
+    # End
+    print("Bot ended naturally.")
+    return
 
-elif input_string in ['bot', 'chat', 'net', 'text']:
-    token = os.getenv('BOT_TOKEN') if not token else token
-    command_channels = ['bot-spam', 'bot-commands', 'botspam']
-    bot.add_cog(Tools(bot))
-    # bot.add_cog(Quote(bot))
-    # bot.add_cog(Events(bot))
-    bot.add_cog(Global(bot, command_channels))
 
-if token:
-    bot.run(token)
-else:
-    print('No valid input was given. Exiting.')
+if __name__ == "__main__":
+    main()
+

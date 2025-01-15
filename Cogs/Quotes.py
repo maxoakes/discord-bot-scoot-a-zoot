@@ -1,7 +1,7 @@
 import discord
 from discord.ext import commands
-from Bot.Quote import Quote
-from Command import Command
+from classes.Quote import Quote
+from Program.Command import Command
 from Util import MessageType, Util
 
 class Quotes(commands.Cog):

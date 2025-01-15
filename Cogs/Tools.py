@@ -1,780 +1,613 @@
-import asyncio
 import datetime
 import os
 import discord
 from discord.ext import commands
-from Bot.MessageDump import MessageDump
-from Command import Command
-from Util import MessageType, Util
+from classes.text_command import TextCommand
+from state import MessageType, Program, Utility
 
-class Tools(commands.Cog):
-    
-    possible_channel_names: list
-    bot: discord.Bot
+class ToolsCog(commands.Cog):
 
-    def __init__(self, bot):
-        self.bot = bot
+    _default_channel_type: str
+
+    def __init__(self):
+        self._default_channel_type = "command"
 
 
     @commands.Cog.listener()
     async def on_ready(self):
-        print(f"READY! Initialized Tools cog.")
-
-
-    # #####################################
-    # Manual Checks (does not use built-in cog command checks)
-    # #####################################
-
-    def is_command_channel(self, context: commands.Context):
-        return isinstance(context.channel, discord.channel.DMChannel) or context.channel.id == Util.DEFAULT_COMMAND_CHANNEL[context.guild.id]
+        print(f"ToolsCog.on_ready(): We have logged in as {Program.bot.user}")
     
 
     # #####################################
     # Commands
     # #####################################
 
-    @commands.command(name='clear', aliases=['cls'], hidden=True, 
-        brief='Delete and archive all messages in this channel',
-        usage='(--limit=<integer>)',
-        description='Delete and archive all messages in this channel. Enter an upper limit to delete only a set number of messages. 2 hour cooldown per channel')
-    @commands.cooldown(1, 7200, commands.BucketType.default)
-    async def command_clear(self, context: commands.Context):
-        command = Command(context.message)
-        limit = command.get_arg('limit') or 1000
-        limit = int(limit) if limit else limit
-        if not (context.channel.permissions_for(context.author).manage_messages):
-            await command.get_channel().send('You do not have permissions to manage messages.')
-            print(f'{command.get_part(0)} failed permission check. Aborting.')
-            return
-        
-        await command.get_channel().send('Cleaning up channel. Please wait. This could take a while...')
-        raw_messages = await context.channel.history(limit=limit, oldest_first=True).flatten()
-        first_datetime = raw_messages[0].created_at
-        recent_timestamp = raw_messages[-1].created_at
-        messages = MessageDump(first_datetime, recent_timestamp, context.guild, context.channel, raw_messages)
-
-        import json
-        output_file_path = ''
-        try:
-            output_file_name = Util.sanitize_file_name(f'messages_{context.guild.name}_{context.channel.name}_{round(datetime.datetime.now().timestamp())}')
-            output_file_path = fr"logs/{output_file_name}.json"
-            with open(output_file_path, "w") as file:
-                json.dump(messages.get_dict(), file, indent=4)
-            print("Channel message dump file written")
-        except Exception as e:
-            print(f"Failed to write dump: {e}")
-            await command.get_channel().send('Failed creating dump of messages. Exiting command...')
-            return
-
-        print(f'Working to delete messages from {context.guild}/{context.channel.name}...')
-        for message in raw_messages:
-            try:
-                await asyncio.sleep(2.0)
-                print(f'Deleting message {context.guild}/{context.channel} {message.id}')
-                await message.delete(reason='Cleanup via `clean` command.')
-            except discord.Forbidden as e:
-                print('Lack of permissions to delete messages')
-                await command.get_channel().send(f'I do not have permissions to delete messages.')
-                await Util.write_dev_log(self.bot, f'Did not have permissions to cleanup channel in {context.guild}/{context.channel}')
-                return
-            except Exception as e:
-                print(f'Unknown Exception: {e}')
-                await Util.write_dev_log(self.bot, f'Got an error when trying to cleanup channel {context.guild}/{context.channel}: {e}')
-                pass
-        print('Done!')
-        attachment = discord.File(output_file_path)
-        await command.get_channel().send(f'Deleted messages between {first_datetime.strftime("%d/%m/%Y, %H:%M:%S")} and {recent_timestamp.strftime("%d/%m/%Y, %H:%M:%S")}. Attached is the archive.', file=attachment)
-
-
-    @commands.command(name='minecraft', aliases=['mc'], hidden=False, 
-        brief='Get the status of a Minecraft server', 
-        usage='[server address]',
-        description='Get the status of a Minecraft server. If the server is online, get all significant information.')
+    # https://api.mcsrvstat.us/
+    @commands.command(name="minecraft", aliases=["mc"], hidden=False, 
+        brief="Get the status of a Minecraft server", 
+        usage="[server address]",
+        description="Get the status of a Minecraft server. If the server is online, get all significant information.")
     async def command_minecraft(self, context: commands.Context):
-        command = Command(context.message)
-        if not self.is_command_channel(context):
-            print(f'{command.get_part(0)} failed check. Aborting.')
+        if not Utility.is_valid_command_context(context, channel_type=self._default_channel_type, is_global_command=True, is_whisper_command=False):
             return
 
+        command = TextCommand(context)
         address = command.get_command_from(1)
-        param = 'ftb.ckwgaming.com' if address == '' else address
-        query_url = f'https://api.mcsrvstat.us/2/{param}'
-        (response, mime, code) = await Util.http_get_thinking(query_url, context)
-
-        if (Tools.print_debug_if_needed(command, response)):
+        if Utility.is_null_or_whitespace(address):
+            context.reply(Program.get_help_instructions("minecraft"))
             return
+        query_url = f"https://api.mcsrvstat.us/2/{address}"
+        (response, mime, code) = await Utility.http_get_thinking(query_url, context)
         
-        if Util.is_200(code):
+        if Utility.is_200(code):
             # required elements
             full_address = f"{response.get('ip', '?.?.?.?')}:{response.get('port', '?????')}"
-            is_online = response.get('online', False)
-            status = 'Online' if is_online else 'Offline'
-            server_name = response.get('hostname') if response.get('hostname', False) else 'Minecraft Server'
+            is_online = response.get("online", False)
+            status = "Online" if is_online else "Offline"
+            server_name = response.get("hostname") if response.get("hostname", False) else "Minecraft Server"
             embed_color = MessageType.POSITIVE.value if is_online else MessageType.NEGATIVE.value
 
             # craft the embed
             embed = discord.Embed(title=server_name, color=embed_color)
-            embed.add_field(name='Address', value=full_address)
-            embed.add_field(name='Status', value=status)
+            embed.add_field(name="Address", value=full_address)
+            embed.add_field(name="Status", value=status)
 
             if is_online:
-                players_curr = response.get('players').get('online')
-                players_max = response.get('players').get('max')
-                embed.add_field(name='Player Count', value=f'{players_curr} of {players_max}')
+                players_curr = response.get("players").get("online")
+                players_max = response.get("players").get("max")
+                embed.add_field(name="Player Count", value=f"{players_curr} of {players_max}")
                 
                 motd = ""
-                for string in response.get('motd').get('clean'):
-                    motd = motd + string + '\n'
-                embed.add_field(name='Message of the Day', value=motd, inline=False)
+                for string in response.get("motd").get("clean"):
+                    motd = motd + string + "\n"
+                embed.add_field(name="Message of the Day", value=motd, inline=False)
 
-                embed.add_field(name='Version', value=response.get('version', 'Unknown Version'))
-                if response.get('mods'):
-                    embed.add_field(name='Number of Mods', value=len(response.get('mods').get('names', [])), inline=False)
+                embed.add_field(name="Version", value=response.get("version", "Unknown Version"))
+                if response.get("mods"):
+                    embed.add_field(name="Number of Mods", value=len(response.get("mods").get("names", [])), inline=False)
 
-            await command.get_channel().send(embed=embed)
+            await context.send(embed=embed)
 
-        elif Util.is_400(code):
-            await command.get_channel().send(embed=Util.create_simple_embed(f'No valid response. Perhaps the expression could not be parsed. ({code})', MessageType.NEGATIVE))
-            
-        else: # server error 500 or something else unknown
-            await command.get_channel().send(embed=Util.create_simple_embed(f'Something went wrong while getting a response. ({code})', MessageType.FATAL))
-            await Util.write_dev_log(self.bot, f'{code} error on {command.get_guild()} requesting `{query_url}`')
+        elif Utility.is_400(code):
+            await context.reply(Program.get_client_error_user_response(code))
+        else:
+            await context.reply(Program.get_server_error_user_response(code))
+            await Program.write_dev_log(Program.get_http_control_server_response(code, context, query_url))
 
-
-    @commands.command(name='bored', hidden=False, 
-        brief='Get a suggestion for something to do', 
-        usage='(--type=[education|recreational|social|diy|charity|cooking|relaxation|music|busywork]) (--participants=[number] (--free)',
-        description='Get a suggestion for something to do')
-    async def command_bored(self, context: commands.Context):
-        command = Command(context.message)
-        if not self.is_command_channel(context):
-            print(f'{command.get_part(0)} failed check. Aborting.')
-            return
-        
-        options = ''
-        requested_type = command.get_arg('type')
-        participants = command.get_arg('participants')
-        if requested_type in ['education','recreational','social','diy','charity','cooking','relaxation','music','busywork']:
-            options = options + f'type={command.get_arg("type")}&'
-        if participants:
-            options = options + f'participants={int(command.get_arg("participants"))}&'
-        if command.does_arg_exist('free'):
-            options = options + f'minprice=0&maxprice=0'
-
-        query_url = f'http://www.boredapi.com/api/activity?{options}'
-        (response, mime, code) = await Util.http_get_thinking(query_url, context)
-
-        if (Tools.print_debug_if_needed(command, response)):
-            return
-        
-        # if the response is a json (likely a 200 response)
-        if Util.is_200(code):
-            embed = discord.Embed(title="Activity", color=MessageType.POSITIVE.value)
-            fields = [
-                ('What to do', response.get('activity', 'Do something fun'), False),
-                ('Type', response.get('type', 'Unknown').capitalize()),
-                ('Participants', response.get('participants', 'At least one')),
-                ('Is it free?', "Yes!" if response.get('price', 1) == 0 else "No")]
-            Util.build_embed_fields(embed, fields)
-            await command.get_channel().send(embed=embed)
-
-        elif Util.is_400(code):
-            await command.get_channel().send(embed=Util.create_simple_embed(f'Something went wrong getting a response and it is your fault. ({code})', MessageType.NEGATIVE))
-            
-        else: # server error 500 or something else unknown
-            await command.get_channel().send(embed=Util.create_simple_embed(f'Something went wrong while getting a response. If you are bored, help debug the issue. ({code})', MessageType.FATAL))
-            await Util.write_dev_log(self.bot, f'{code} error on {command.get_guild()} requesting `{query_url}`')
 
     # https://dictionaryapi.dev/
-    @commands.command(name='word', hidden=False, aliases=['dict', 'dictionary', 'def', 'define'],
-        brief='Get the definition(s) of a word', 
-        usage='[word]',
-        description='Get the definition(s) of a word')
+    @commands.command(name="word", hidden=False, aliases=["dict", "dictionary", "def", "define"],
+        brief="Get the definition(s) of a word", 
+        usage="[word]",
+        description="Get the definition(s) of a word")
     async def command_word(self, context: commands.Context):
-        command = Command(context.message)
-        if not self.is_command_channel(context):
-            print(f'{command.get_part(0)} failed check. Aborting.')
+        if not Utility.is_valid_command_context(context, channel_type=self._default_channel_type, is_global_command=True, is_whisper_command=False):
             return
         
+        command = TextCommand(context)
         word = command.get_command_from(1)
-        query_url = f'https://api.dictionaryapi.dev/api/v2/entries/en/{word}'
-        (response, mime, code) = await Util.http_get_thinking(query_url, context)
-
-        if (Tools.print_debug_if_needed(command, response)):
+        if Utility.is_null_or_whitespace(word):
+            context.reply(Program.get_help_instructions("word"))
             return
         
-        if Util.is_200(code):
+        query_url = f"https://api.dictionaryapi.dev/api/v2/entries/en/{word}"
+        (response, mime, code) = await Utility.http_get_thinking(query_url, context)
+        
+        if Utility.is_200(code):
             for usage in response:
                 # get the word
-                if not usage.get('word'):
+                if not usage.get("word"):
                     continue
-                this_word = usage.get('word').capitalize()
+                this_word = usage.get("word").capitalize()
 
                 # for each meaning, get each definition. Each meaning will have its own embed
-                for meaning in usage.get('meanings', []):
-                    part = meaning.get('partOfSpeech')
-                    embed = discord.Embed(title=f'{this_word} ({part})', url=usage.get('sourceUrls', [None])[0], color=MessageType.POSITIVE.value)
-                    embed.add_field(name='Phonetics', value=usage.get('phonetic'), inline=False)
+                for meaning in usage.get("meanings", []):
+                    part = meaning.get("partOfSpeech")
+                    embed = discord.Embed(title=f"{this_word} ({part})", url=usage.get("sourceUrls", [None])[0], color=MessageType.POSITIVE.value)
+                    embed.add_field(name="Phonetics", value=usage.get("phonetic"), inline=False)
 
                     # for each definition, add a field in the embed
                     i = 0
-                    for i, definition in enumerate(meaning.get('definitions')):
-                        name = f'{i+1}. Definition'
-                        d = definition.get('definition')
-                        e = definition.get('example')
+                    for i, definition in enumerate(meaning.get("definitions")):
+                        name = f"{i+1}. Definition"
+                        d = definition.get("definition")
+                        e = definition.get("example")
 
                         # the value will be the definition, and additionally an example, if one is provided
-                        value = f'{d}\n - Example: *{e}*\n' if e else f'{d}'
+                        value = f"{d}\n - Example: *{e}*\n" if e else f"{d}"
 
                         embed.add_field(name=name, value=value, inline=False)
-                    embed.add_field(name='Source', value=usage.get('sourceUrls', ['None available'])[0], inline=False)
-                    await command.get_channel().send(embed=embed)
+                    embed.add_field(name="Source", value=usage.get("sourceUrls", ["None available"])[0], inline=False)
+                    await context.send(embed=embed)
 
-        elif Util.is_400(code):
-            await command.get_channel().send(embed=Util.create_simple_embed(f'No valid response. Perhaps the expression could not be parsed. ({code})', MessageType.NEGATIVE))
-            
-        else: # server error 500 or something else unknown
-            await command.get_channel().send(embed=Util.create_simple_embed(f'Something went wrong while getting a response. ({code})', MessageType.FATAL))
-            await Util.write_dev_log(self.bot, f'{code} error on {command.get_guild()} requesting `{query_url}`')
+        elif Utility.is_400(code):
+            await context.reply(Program.get_client_error_user_response(code))
+        else:
+            await context.reply(Program.get_server_error_user_response(code))
+            await Program.write_dev_log(Program.get_http_control_server_response(code, context, query_url))
 
 
     # https://color.serialif.com/#anchor-request
     # note: not using alpha channel ability with this API because the response is not consistent with non-alpha color response
-    @commands.command(name='color', hidden=False,
-        brief='Enter a color for its RGB, HSL, hex values and closest name', 
-        usage='(name [name of color]) OR (hex [hexidecimal value]) OR (rgb [0..255] [0..255] [0..255]) OR (hsl [0..255] [0..100] [0..100])',
-        description='Enter a color for its RGB, HSL, hex values and closest name')
+    @commands.command(name="color", hidden=False,
+        brief="Enter a color for its RGB, HSL, hex values and closest name", 
+        usage="(name [name of color]) OR (hex [hexidecimal value]) OR (rgb [0..255] [0..255] [0..255]) OR (hsl [0..255] [0..100] [0..100])",
+        description="Enter a color for its RGB, HSL, hex values and closest name")
     async def command_color(self, context: commands.Context):
-        command = Command(context.message)
-        if not self.is_command_channel(context):
-            print(f'{command.get_part(0)} failed check. Aborting.')
+        if not Utility.is_valid_command_context(context, channel_type=self._default_channel_type, is_global_command=True, is_whisper_command=False):
             return
         
+        command = TextCommand(context)
         value_type = command.get_part(1)
-        query_url = 'https://color.serialif.com/'
+        query_url = "https://color.serialif.com/"
 
         # parse command for color components
         # if it is a color code of ints
-        if value_type in ['rgb', 'hsl', 'hsl']:
+        if value_type in ["rgb", "hsl", "hsl"]:
             values = (command.get_part(2), command.get_part(3), command.get_part(4))
-            query_url = query_url + f'{value_type}={values[0]},{values[1]},{values[2]}'
+            query_url = query_url + f"{value_type}={values[0]},{values[1]},{values[2]}"
         # if it is a name for a color
-        elif value_type in ['name', 'word', 'keyword']:
-            query_url = query_url + f'keyword={command.get_command_from(2)}'
+        elif value_type in ["name", "word", "keyword"]:
+            query_url = query_url + f"keyword={command.get_command_from(2)}"
         # if it is a hex or hex alpha
-        elif value_type in ['hex']:
-            query_url = query_url + f'{command.get_part(2).replace("0x", "").replace("#", "")}'
+        elif value_type in ["hex"]:
+            query_url = query_url + f"{command.get_part(2).replace('0x', '').replace('#', '')}"
         # if the input params were bad
         else:
-            await command.get_channel().send(embed=Util.create_simple_embed(f"Not a valid input. See `>>help color`", MessageType.NEGATIVE))
+            await context.reply(Program.get_help_instructions("color"))
             return
 
         # when everything is all good, make the request
-        (response, mime, code) = await Util.http_get_thinking(query_url, context)
-        status = response.get('status')
-
-        if (Tools.print_debug_if_needed(command, response)):
-            return
+        (response, mime, code) = await Utility.http_get_thinking(query_url, context)
+        status = response.get("status")
         
         # this API does not return 400 when it is a bad request...
-        if status == 'success':
+        if status == "success":
             # create the embed describing the requested color
-            base_keyword = response.get('base', {}).get('keyword', '').capitalize()
-            base_rgb = response.get('base', {}).get('rgb', {}).get('value')
-            base_hsl = response.get('base', {}).get('hsl', {}).get('value')
-            base_hex = response.get('base', {}).get('hex', {}).get('value')
+            base_keyword = response.get("base", {}).get("keyword", "").capitalize()
+            base_rgb = response.get("base", {}).get("rgb", {}).get("value")
+            base_hsl = response.get("base", {}).get("hsl", {}).get("value")
+            base_hex = response.get("base", {}).get("hex", {}).get("value")
 
-            base_value = int(f'0x{base_hex[1:]}', 16)
-            base_title_available = base_keyword != ''
+            base_value = int(f"0x{base_hex[1:]}", 16)
+            base_title_available = base_keyword != ""
             base_title = base_keyword if base_title_available else base_rgb
-            base_embed = discord.Embed(title=f'Requested: {base_title}', color=base_value)
+            base_embed = discord.Embed(title=f"Requested: {base_title}", color=base_value)
 
             if base_title_available:
-                base_embed.add_field(name='Closest Name', value=base_keyword, inline=False)
-            base_embed.add_field(name='Red, Blue, Green', value=base_rgb, inline=False)
-            base_embed.add_field(name='Hue, Saturation, Lightness', value=base_hsl, inline=False)
-            base_embed.add_field(name='Hexidecimal', value=base_hex, inline=False)
-            await command.get_channel().send(embed=base_embed)
+                base_embed.add_field(name="Closest Name", value=base_keyword, inline=False)
+            base_embed.add_field(name="Red, Blue, Green", value=base_rgb, inline=False)
+            base_embed.add_field(name="Hue, Saturation, Lightness", value=base_hsl, inline=False)
+            base_embed.add_field(name="Hexidecimal", value=base_hex, inline=False)
+            await context.send(embed=base_embed)
 
             # create an embed for the complementary color
-            comp_keyword = response.get('complementary', {}).get('keyword', '').capitalize()
-            comp_rgb = response.get('complementary', {}).get('rgb', {}).get('value')
-            comp_hsl = response.get('complementary', {}).get('hsl', {}).get('value')
-            comp_hex = response.get('complementary', {}).get('hex', {}).get('value')
+            comp_keyword = response.get("complementary", {}).get("keyword", "").capitalize()
+            comp_rgb = response.get("complementary", {}).get("rgb", {}).get("value")
+            comp_hsl = response.get("complementary", {}).get("hsl", {}).get("value")
+            comp_hex = response.get("complementary", {}).get("hex", {}).get("value")
 
-            comp_value = int(f'0x{comp_hex[1:]}', 16)
-            comp_title_available = comp_keyword != ''
+            comp_value = int(f"0x{comp_hex[1:]}", 16)
+            comp_title_available = comp_keyword != ""
             comp_title = comp_keyword if comp_title_available else comp_rgb
-            comp_embed = discord.Embed(title=f'Complementary: {comp_title}', color=comp_value)
+            comp_embed = discord.Embed(title=f"Complementary: {comp_title}", color=comp_value)
 
             if comp_title_available:
-                comp_embed.add_field(name='Closest Name', value=comp_keyword, inline=False)
-            comp_embed.add_field(name='Red, Blue, Green', value=comp_rgb, inline=False)
-            comp_embed.add_field(name='Hue, Saturation, Lightness', value=comp_hsl, inline=False)
-            comp_embed.add_field(name='Hexidecimal', value=comp_hex, inline=False)
-            await command.get_channel().send(embed=comp_embed)
+                comp_embed.add_field(name="Closest Name", value=comp_keyword, inline=False)
+            comp_embed.add_field(name="Red, Blue, Green", value=comp_rgb, inline=False)
+            comp_embed.add_field(name="Hue, Saturation, Lightness", value=comp_hsl, inline=False)
+            comp_embed.add_field(name="Hexidecimal", value=comp_hex, inline=False)
+            await context.send(embed=comp_embed)
 
-        elif status == 'error':
-            await command.get_channel().send(embed=Util.create_simple_embed(f"Got an error response. Perhaps it was not a valid color. Message: {response.get('error', {}).get('message')}", MessageType.NEGATIVE))
+        elif status == "error":
+            await context.reply(f"Got an error response. Perhaps it was not a valid color. Message: {response.get('error', {}).get('message')}")
         else:
-            await command.get_channel().send(embed=Util.create_simple_embed(f"Unknown error. Is the endpoint server down? ({code}): {response}", MessageType.FATAL))
-            await Util.write_dev_log(self.bot, f'{code} ({response}) error on {command.get_guild()} requesting `{query_url}`')
+            await context.reply(f"Unknown error. Is the endpoint server down? ({code}): {response}")
+            await Program.write_dev_log(Program.get_http_control_server_response(code, context, query_url, response))
 
 
     # https://corporatebs-generator.sameerkumar.website/
-    @commands.command(name='buzz', hidden=False,
-        brief='Generate a buzzword tech phrase',
-        description='Generate a buzzword tech phrase')
+    @commands.command(name="buzz", hidden=False,
+        brief="Generate a buzzword tech phrase",
+        description="Generate a buzzword tech phrase")
     async def command_buzz(self, context: commands.Context):
-        command = Command(context.message)
-        if not self.is_command_channel(context):
-            print(f'{command.get_part(0)} failed check. Aborting.')
+        if not Utility.is_valid_command_context(context, channel_type=self._default_channel_type, is_global_command=True, is_whisper_command=False):
             return
         
-        query_url = 'https://corporatebs-generator.sameerkumar.website/'
-        (response, mime, code) = await Util.http_get_thinking(query_url, context)
-
-        if (Tools.print_debug_if_needed(command, response)):
-            return
+        query_url = "https://corporatebs-generator.sameerkumar.website/"
+        (response, mime, code) = await Utility.http_get_thinking(query_url, context)
         
         # this API does not return 400 when it is a bad request...
-        if Util.is_200(code):
-            phrase = response.get('phrase')
-            await command.get_channel().send(f'*I present*... **{phrase}**')
+        if Utility.is_200(code):
+            phrase = response.get("phrase")
+            await context.send(f"*I present*... **{phrase}**")
 
-        elif Util.is_400(code):
-            await command.get_channel().send(embed=Util.create_simple_embed(f'No valid response and it is your fault. ({code})', MessageType.NEGATIVE))
-            
-        else: # server error 500 or something else unknown
-            await command.get_channel().send(embed=Util.create_simple_embed(f'Something went wrong while getting a response. ({code})', MessageType.FATAL))
-            await Util.write_dev_log(self.bot, f'{code} error on {command.get_guild()} requesting `{query_url}`')
+        elif Utility.is_400(code):
+            await context.reply(Program.get_client_error_user_response(code))
+        else:
+            await context.reply(Program.get_server_error_user_response(code))
+            await Program.write_dev_log(Program.get_http_control_server_response(code, context, query_url))
 
 
     # https://uselessfacts.jsph.pl/
-    @commands.command(name='fact', hidden=False,
-        brief='Generate a random fun-fact',
-        usage='(--de)',
-        description='Generate a random fun-fact. Also supports results in German.')
+    @commands.command(name="fact", hidden=False,
+        brief="Generate a random fun-fact",
+        usage="(--de)",
+        description="Generate a random fun-fact. Also supports results in German.")
     async def command_fact(self, context: commands.Context):
-        command = Command(context.message)
-        if not self.is_command_channel(context):
-            print(f'{command.get_part(0)} failed check. Aborting.')
+        if not Utility.is_valid_command_context(context, channel_type=self._default_channel_type, is_global_command=True, is_whisper_command=False):
             return
         
-        suffix = '?language=de' if command.does_arg_exist('de') else ''
-        query_url = f'https://uselessfacts.jsph.pl/api/v2/facts/random{suffix}'
-        (response, mime, code) = await Util.http_get_thinking(query_url, context)
-
-        if (Tools.print_debug_if_needed(command, response)):
-            return
+        command = TextCommand(context)
+        suffix = "?language=de" if command.does_arg_exist("de") else ""
+        query_url = f"https://uselessfacts.jsph.pl/api/v2/facts/random{suffix}"
+        (response, mime, code) = await Utility.http_get_thinking(query_url, context)
         
-        if Util.is_200(code):
-            fact = response.get('text', 'This API is broken')
-            await command.get_channel().send(f'**Fun Fact:** {fact}')
+        if Utility.is_200(code):
+            fact = response.get("text", "This API is broken")
+            await context.send(f"**Fun Fact:** {fact}")
 
-        elif Util.is_400(code):
-            await command.get_channel().send(embed=Util.create_simple_embed(f'No valid response and it is your fault. ({code})', MessageType.NEGATIVE))
-            
-        else: # server error 500 or something else unknown
-            await command.get_channel().send(embed=Util.create_simple_embed(f'Something went wrong while getting a response. ({code})', MessageType.FATAL))
-            await Util.write_dev_log(self.bot, f'{code} error on {command.get_guild()} requesting `{query_url}`')
+        elif Utility.is_400(code):
+            await context.reply(Program.get_client_error_user_response(code))
+        else:
+            await context.reply(Program.get_server_error_user_response(code))
+            await Program.write_dev_log(Program.get_http_control_server_response(code, context, query_url))
 
 
     # https://v2.jokeapi.dev/
-    @commands.command(name='joke', hidden=False,
-        brief='Get a joke',
-        usage='[programming|dark|pun|spooky|christmas] (--nsfw) (--religious) (--political) (--racist) (--sexist) (--explicit) (--search=[string]) (--lang=[en|es|de|fr|cs|pt])',
-        description='Get a joke. Use --flags to blacklist types of jokes. Not specifying a category will yield any type of joke.')
+    @commands.command(name="joke", hidden=False,
+        brief="Get a joke",
+        usage="[programming|dark|pun|spooky|christmas] (--nsfw) (--religious) (--political) (--racist) (--sexist) (--explicit) (--search=[string]) (--lang=[en|es|de|fr|cs|pt])",
+        description="Get a joke. Use --flags to blacklist types of jokes. Not specifying a category will yield any type of joke.")
     async def command_joke(self, context: commands.Context):
-        command = Command(context.message)
-        if not self.is_command_channel(context):
-            print(f'{command.get_part(0)} failed check. Aborting.')
+        if not Utility.is_valid_command_context(context, channel_type=self._default_channel_type, is_global_command=True, is_whisper_command=False):
             return
+
+        command = TextCommand(context)
 
         # get the list of request categories
         categories = []
         i = 1
-        while command.get_part(i) != '':
-            if command.get_part(i) in ['programming', 'dark', 'pun', 'spooky', 'christmas']:
+        while command.get_part(i) != "":
+            if command.get_part(i) in ["programming", "dark", "pun", "spooky", "christmas"]:
                 categories.append(command.get_part(i))
             i = i + 1
         if len(categories) == 0:
-            categories = ['Any']
-        categories_string = ','.join(categories)
+            categories = ["Any"]
+        categories_string = ",".join(categories)
 
         # get all blacklisted categories
         blacklisted = []
-        for flag in ['religious', 'political', 'racist', 'sexist', 'explicit']:
+        for flag in ["religious", "political", "racist", "sexist", "explicit"]:
             if command.does_arg_exist(flag):
                 blacklisted.append(flag)
-        blacklist_string = f'blacklistFlags={",".join(blacklisted)}&' if len(blacklisted) > 0 else ''
+        blacklist_string = f"blacklistFlags={','.join(blacklisted)}&" if len(blacklisted) > 0 else ""
 
         # get the language parameter
-        lang_string = ''
-        input_lang = command.get_arg('lang')
-        if input_lang in ['en', 'es', 'de', 'fr', 'cs', 'pt']:
-            lang_string = f'lang={input_lang}&'
+        lang_string = ""
+        input_lang = command.get_arg("lang")
+        if input_lang in ["en", "es", "de", "fr", "cs", "pt"]:
+            lang_string = f"lang={input_lang}&"
 
         # get any string to search
-        search_string = ''
-        input_search = command.get_arg('search')
+        search_string = ""
+        input_search = command.get_arg("search")
         if input_search:
-            search_string = f'contains={input_search}&'
+            search_string = f"contains={input_search}&"
 
-        query_url = f'https://v2.jokeapi.dev/joke/{categories_string}?{lang_string}{blacklist_string}{search_string}'
-        (response, mime, code) = await Util.http_get_thinking(query_url, context)
-
-        if (Tools.print_debug_if_needed(command, response)):
-            return
+        query_url = f"https://v2.jokeapi.dev/joke/{categories_string}?{lang_string}{blacklist_string}{search_string}"
+        (response, mime, code) = await Utility.http_get_thinking(query_url, context)
         
-        if Util.is_200(code):
-            preface = 'Here is a joke:\n'
-            joke_type = response.get('type')
-            if joke_type == 'single':
-                joke = response.get('joke')
-                await command.get_channel().send(f'{preface}*{joke}*')
-            elif joke_type == 'twopart':
-                setup = response.get('setup')
-                delivery = response.get('delivery')
-                await command.get_channel().send(f'{preface}*{setup}\n||{delivery}||*')
+        if Utility.is_200(code):
+            preface = "Here is a joke:\n"
+            joke_type = response.get("type")
+            if joke_type == "single":
+                joke = response.get("joke")
+                await context.send(f"{preface}*{joke}*")
+            elif joke_type == "twopart":
+                setup = response.get("setup")
+                delivery = response.get("delivery")
+                await context.send(f"{preface}*{setup}\n||{delivery}||*")
             else:
-                if response.get('code') == 106: # 106 ?= no joke found
-                    await command.get_channel().send(embed=Util.create_simple_embed("No joke matching the selected criteria. soz", MessageType.NEGATIVE))
+                if response.get("code") == 106: # 106 ?= no joke found
+                    await context.reply("No joke matching the selected criteria. soz")
                 else:
-                    await command.get_channel().send(embed=Util.create_simple_embed(f"The joke was too good; it broke the API. code={response.get('code', '???')}", MessageType.FATAL))
+                    await context.reply(f"The joke was too good; it broke the API. code={response.get('code', '???')}")
                     
-        elif Util.is_400(code):
-            await command.get_channel().send(embed=Util.create_simple_embed(f'No valid response and it is your fault. ({code})', MessageType.NEGATIVE))
-            
-        else: # server error 500 or something else unknown
-            await command.get_channel().send(embed=Util.create_simple_embed(f'Something went wrong while getting a response. ({code})', MessageType.FATAL))
-            await Util.write_dev_log(self.bot, f'{code} error on {command.get_guild()} requesting `{query_url}`')
+        elif Utility.is_400(code):
+            await context.reply(Program.get_client_error_user_response(code))
+        else:
+            await context.reply(Program.get_server_error_user_response(code))
+            await Program.write_dev_log(Program.get_http_control_server_response(code, context, query_url))
 
 
     # https://geokeo.com/
-    @commands.command(name='geo', hidden=False, aliases=['loc', 'location', 'geography'],
-        brief='Get geographical information from an input',
-        usage='[any location input type] (--limit=[number])',
-        description='Get geographical information from an input')
+    @commands.command(name="geo", hidden=False, aliases=["loc", "location", "geography"],
+        brief="Get geographical information from an input",
+        usage="[any location input type] (--limit=[number])",
+        description="Get geographical information from an input")
     async def command_geo(self, context: commands.Context):
-        command = Command(context.message)
-        if not self.is_command_channel(context):
-            print(f'{command.get_part(0)} failed check. Aborting.')
+        if not Utility.is_valid_command_context(context, channel_type=self._default_channel_type, is_global_command=True, is_whisper_command=False):
             return
         
+        command = TextCommand(context)
         input_string = command.get_command_from(1)
-        result_limit = int(command.get_arg('limit', default=3))
-        if input_string == '':
-            await command.get_channel().send(embed=Util.create_simple_embed(f'Enter any search parameter.', MessageType.NEGATIVE))
+        result_limit = int(command.get_arg("limit", default=3))
+        if Utility.is_null_or_whitespace(input_string):
+            await context.reply(Program.get_help_instructions("geo"))
             return
         
-        query_url = f'https://geokeo.com/geocode/v1/search.php?q={input_string}?&api={os.getenv("GEOKEO_TOKEN")}'
-        (response, mime, code) = await Util.http_get_thinking(query_url, context)
-        status = response.get('status', 'ok')
+        query_url = f"https://geokeo.com/geocode/v1/search.php?q={input_string}?&api={os.getenv('GEOKEO_TOKEN')}"
+        try:
+            (response, mime, code) = await Utility.http_get_thinking(query_url, context)
+            status = response.get("status", "ok")
 
-        if (Tools.print_debug_if_needed(command, response)):
-            return
-        
-        # this API only returns 200 code...
-        if status == 'ok':
-            for result in response.get('results', [])[:result_limit]:
-                geo_class = result.get('class', 'Location').capitalize()
-                geo_type = result.get('type', '').capitalize()
-                address: dict = result.get('address_components', {})
-                coords: dict = result.get('geometry').get('location')
-                url = f'https://www.google.com/maps/@{coords.get("lat")},{coords.get("lng")},10.0z'
-                embed = discord.Embed(title=f'{geo_class} Information', url=url, color=MessageType.POSITIVE.value)
+            # this API only returns 200 code...
+            if status == "ok":
+                for result in response.get("results", [])[:result_limit]:
+                    geo_class = result.get("class", "Location").capitalize()
+                    geo_type = result.get("type", "").capitalize()
+                    address: dict = result.get("address_components", {})
+                    coords: dict = result.get("geometry").get("location")
+                    url = f"https://www.google.com/maps/@{coords.get('lat')},{coords.get('lng')},15.0z"
+                    embed = discord.Embed(title=f"{geo_class} Information", url=url, color=MessageType.POSITIVE.value)
 
-                name_values = [('Class', geo_class), ('Type', geo_type)]
-                address_order = ['name', 'island', 'neighbourhood', 'street', 'subdistrict', 'district', 'city', 'state', 'postcode', 'country']
-                for component in address_order:
-                    value = address.get(component)
-                    if value:
-                        name_values.append((component.capitalize(), address.get(component)))
+                    name_values = [("Class", geo_class), ("Type", geo_type)]
+                    address_order = ["name", "island", "neighbourhood", "street", "subdistrict", "district", "city", "state", "postcode", "country"]
+                    for component in address_order:
+                        value = address.get(component)
+                        if value:
+                            name_values.append((component.capitalize(), address.get(component)))
 
-                Util.build_embed_fields(embed, name_values)
-                embed.add_field(name='Coordinates', value=f'{round(float(coords.get("lat")), 4)}, {round(float(coords.get("lng")), 4)}', inline=False)
-                await command.get_channel().send(embed=embed)
+                    Utility.build_embed_fields(embed, name_values)
+                    embed.add_field(name="Coordinates", value=f"{round(float(coords.get('lat')), 4)}, {round(float(coords.get('lng')), 4)}", inline=False)
+                    await context.send(embed=embed)
 
-        elif status == 'ZERO_RESULTS':
-            await command.get_channel().send(embed=Util.create_simple_embed(f'No results. Try describing the location differently.', MessageType.NEGATIVE))
+            elif status == "ZERO_RESULTS":
+                await context.reply(Program.get_client_error_user_response(status))
+            else:
+                await context.reply(Program.get_server_error_user_response(status))
+                await Program.write_dev_log(Program.get_http_control_server_response(code, context, query_url, status))
+        except:
+            await context.reply(Program.get_server_error_user_response("Error in API response"))
+            await Program.write_dev_log(Program.get_http_control_server_response(None, context, query_url, "Possible malformed JSON"))
 
-        else:
-            await command.get_channel().send(embed=Util.create_simple_embed(f'Unknown error processing request. Status: ({status})', MessageType.FATAL))
-            await Util.write_dev_log(self.bot, f'{code} ({status}) error on {command.get_guild()} requesting `{query_url}`')
 
-
-    @commands.command(name='ip', hidden=False,
-        brief='Get (possibly) correct location statistics from an IPv4 address',
-        usage='[IPv4 address]',
-        description='Get (possibly) correct location statistics from an IPv4 address')
+    # https://api.techniknews.net/ipgeo/
+    @commands.command(name="ip", hidden=False,
+        brief="Get (possibly) correct location statistics from an IPv4 address",
+        usage="[IPv4 address]",
+        description="Get (possibly) correct location statistics from an IPv4 address")
     async def command_ip(self, context: commands.Context):
-        command = Command(context.message)
-        if not self.is_command_channel(context):
-            print(f'{command.get_part(0)} failed check. Aborting.')
+        if not Utility.is_valid_command_context(context, channel_type=self._default_channel_type, is_global_command=True, is_whisper_command=False):
             return
         
+        command = TextCommand(context)
         ip = command.get_command_from(1)
-        if ip == '':
-            await command.get_channel().send(embed=Util.create_simple_embed(f'Enter an IPv4 address as a parameter.', MessageType.NEGATIVE))
+        if Utility.is_null_or_whitespace(ip):
+            await context.reply(Program.get_help_instructions("ip"))
             return
         
-        query_url = f'https://api.techniknews.net/ipgeo/{ip}'
-        (response, mime, code) = await Util.http_get_thinking(query_url, context)
-        status = response.get('status', 'success')
-        if (Tools.print_debug_if_needed(command, response)):
-            return
+        query_url = f"https://api.techniknews.net/ipgeo/{ip}"
+        (response, mime, code) = await Utility.http_get_thinking(query_url, context)
+        status = response.get("status", "success")
         
         # this API only returns 200 code...
-        if status == 'success':
-            latt = response.get('lat')
-            long = response.get('lon')
+        if status == "success":
+            latt = response.get("lat", 0)
+            long = response.get("lon", 0)
 
-            url = f'https://www.google.com/maps/@{latt},{long},10.0z' if latt and long else None
-            embed = discord.Embed(title='IPv4 Geolocation Lookup Result', url=url, color=MessageType.POSITIVE.value)
+            url = f"https://www.google.com/maps/@{latt},{long},15.0z" if latt and long else None
+            embed = discord.Embed(title="IPv4 Geolocation Lookup Result", url=url, color=MessageType.POSITIVE.value)
 
             name_values = [
-                ('IP', response.get('ip')), 
-                ('City', response.get('city')), 
-                ('Region', response.get('regionName')), 
-                ("Postal Code", response.get('zip')), 
-                ('Country', response.get('country')), 
-                ('Timezone', response.get('timezone')),
-                ('Service Provider', response.get('isp')), 
-                ('Organization', response.get('org')), 
-                ('Autonomous System', response.get('as')),
-                ('Proxy', response.get('proxy')), 
-                ('Mobile', response.get('mobile')), 
-                ('Cached Result', response.get('cached')), 
-                ('Coordinates', f'{round(float(latt), 4)}, {round(float(long), 4)}')]
-            Util.build_embed_fields(embed, name_values)
+                ("IP", response.get("ip")), 
+                ("City", response.get("city")), 
+                ("Region", response.get("regionName")), 
+                ("Postal Code", response.get("zip")), 
+                ("Country", response.get("country")), 
+                ("Timezone", response.get("timezone")),
+                ("Service Provider", response.get("isp")), 
+                ("Organization", response.get("org")), 
+                ("Autonomous System", response.get("as")),
+                ("Proxy", response.get("proxy")), 
+                ("Mobile", response.get("mobile")), 
+                ("Cached Result", response.get("cached")), 
+                ("Coordinates", f"{round(float(latt), 4)}, {round(float(long), 4)}")]
+            Utility.build_embed_fields(embed, name_values)
 
-            embed.set_footer(text='Note that accuracy of IP geolocation lookup may vary per service that is used. This result may not be correct for some addresses.')
-            await command.get_channel().send(embed=embed)
-
+            embed.set_footer(text="Note that accuracy of IP geolocation lookup may vary per service that is used. This result may not be correct for some addresses.")
+            await context.send(embed=embed)
         else:
-            if response.get('message', 'invalid ip'):
-                await command.get_channel().send(embed=Util.create_simple_embed(f'Not a valid IPv4 address. Message: ({response.get("message")})', MessageType.NEGATIVE))
+            if response.get("message", "invalid ip"):
+                await context.reply(Program.get_client_error_user_response(response.get("message")))
             else:
-                await command.get_channel().send(embed=Util.create_simple_embed(f'Unknown error. Message: ({response.get("message")}), ({code})', MessageType.FATAL))
-                await Util.write_dev_log(self.bot, f'{code} ({response.get("message")}) error on {command.get_guild()} requesting `{query_url}`')
+                await context.reply(Program.get_server_error_user_response(response.get("message")))
+                await Program.write_dev_log(Program.get_http_control_server_response(code, context, query_url, response.get("message")))
+
 
 
     # https://newton.vercel.app/
-    @commands.command(name='math', hidden=False,
-        brief='Do some math',
-        usage='[simplify|factor|derive|integrate|zeroes|tangent|cos|sin|tan|arccos|arcsin|arc|tan|abs|log] [expression]',
-        description='Do some math')
+    @commands.command(name="math", hidden=False,
+        brief="Do some math",
+        usage="[simplify|factor|derive|integrate|zeroes|tangent|cos|sin|tan|arccos|arcsin|arc|tan|abs|log] [expression]",
+        description="Do some math")
     async def command_math(self, context: commands.Context):
-        command = Command(context.message)
-        if not self.is_command_channel(context):
-            print(f'{command.get_part(0)} failed check. Aborting.')
+        if not Utility.is_valid_command_context(context, channel_type=self._default_channel_type, is_global_command=True, is_whisper_command=False):
             return
         
+        command = TextCommand(context)
         operation = None
-        if command.get_part(1) in ['simplify', 'factor', 'derive', 'integrate', 'zeroes', 'tangent', 'area', 'cos', 'sin', 'tan', 'arccos', 'arcsin', 'arctan', 'abs', 'log']:
+        if command.get_part(1) in ["simplify", "factor", "derive", "integrate", "zeroes", "tangent", "area", "cos", "sin", "tan", "arccos", "arcsin", "arctan", "abs", "log"]:
             operation = command.get_part(1)
         expression = command.get_command_from(2)
-        expression = expression.replace('/','(over)').replace('log','l')
+        expression = expression.replace("/","(over)").replace("log","l")
 
-        if operation == None or expression == '':
-            await command.get_channel().send(embed=Util.create_simple_embed(f'Enter a valid operation and expression.', MessageType.NEGATIVE))
+        if Utility.is_null_or_whitespace(operation) or Utility.is_null_or_whitespace(expression):
+            await context.reply(Program.get_help_instructions("math"))
             return
         
-        query_url = f'https://newton.now.sh/api/v2/{operation}/{expression}'
-        (response, mime, code) = await Util.http_get_thinking(query_url, context)
+        query_url = f"https://newton.now.sh/api/v2/{operation}/{expression}"
+        (response, mime, code) = await Utility.http_get_thinking(query_url, context)
         
-        if (Tools.print_debug_if_needed(command, response)):
-            return
-        
-        if Util.is_200(code):
-            result = response.get('result')
-            confirmed_expression = response.get('expression')
-            await command.get_channel().send(f'**{operation.capitalize()}: {confirmed_expression}**```{result}```')
+        if Utility.is_200(code):
+            result = response.get("result")
+            confirmed_expression = response.get("expression")
+            await context.send(f"**{operation.capitalize()}: {confirmed_expression}**```{result}```")
 
-        elif Util.is_400(code):
-            await command.get_channel().send(embed=Util.create_simple_embed(f'No valid response. Perhaps the expression could not be parsed. ({code})', MessageType.NEGATIVE))
-            
-        else: # server error 500 or something else unknown
-            await command.get_channel().send(embed=Util.create_simple_embed(f'Something went wrong while getting a response. ({code})', MessageType.FATAL))
-            await Util.write_dev_log(self.bot, f'{code} error on {command.get_guild()} requesting `{query_url}`')
+        elif Utility.is_400(code):
+            await context.reply(Program.get_client_error_user_response(code))
+        else:
+            await context.reply(Program.get_server_error_user_response(code))
+            await Program.write_dev_log(Program.get_http_control_server_response(code, context, query_url))
 
 
     # https://docs.aviationapi.com/#tag/airports
-    @commands.command(name='airport', hidden=False, aliases=['ap', 'av'],
-        brief='Get basic airport statistics given a code',
-        usage='[list of ICAO or FAA identifiers separated by spaces]',
-        description='Get basic airport statistics given a code')
+    @commands.command(name="airport", hidden=False, aliases=["ap", "av"],
+        brief="Get basic airport statistics given a code",
+        usage="[list of ICAO or FAA identifiers separated by spaces]",
+        description="Get basic airport statistics given a code")
     async def command_airport(self, context: commands.Context):
-        command = Command(context.message)
-        if not self.is_command_channel(context):
-            print(f'{command.get_part(0)} failed check. Aborting.')
+        if not Utility.is_valid_command_context(context, channel_type=self._default_channel_type, is_global_command=True, is_whisper_command=False):
             return
         
-        param = command.get_command_from(1).replace(', ',',').replace(' ',',')
-        if param == '':
-            await command.get_channel().send(embed=Util.create_simple_embed(f'Not a valid input. Consult `>>help airport` for help.', MessageType.NEGATIVE))
+        command = TextCommand(context)
+        param = command.get_command_from(1).replace(", ",",").replace(" ",",")
+        if Utility.is_null_or_whitespace(param):
+            await context.reply(Program.get_help_instructions("airport"))
             return
 
-        query_url = f'https://api.aviationapi.com/v1/airports?apt={param}'
-        (response, mime, code) = await Util.http_get_thinking(query_url, context)
+        query_url = f"https://api.aviationapi.com/v1/airports?apt={param}"
+        (response, mime, code) = await Utility.http_get_thinking(query_url, context)
         
-        if (Tools.print_debug_if_needed(command, response)):
-            return
-        
-        # this API does not return 400 when it is a bad request...
-        if Util.is_200(code):
+        if Utility.is_200(code):
             for (key, entry) in list(response.items()):
                 if len(entry) == 0:
-                    await command.get_channel().send(embed=Util.create_simple_embed(f'Could not find anything given the ID `{key}`. Note this command is for US airfields only.', MessageType.NEGATIVE))
+                    await context.reply(f"Could not find anything given the ID `{key}`. Note this command is for US airfields only.")
                     continue
                 info: dict = entry[0]
-                name = info.get('facility_name', 'Unknown Name')
-                airport_type = info.get('type', 'Unknown Type')
-                title = f'{name} ({airport_type})'
+                name = info.get("facility_name", "Unknown Name")
+                airport_type = info.get("type", "Unknown Type")
+                title = f"{name} ({airport_type})"
                 embed = discord.Embed(title=title, color=MessageType.POSITIVE.value)
 
                 name_values = [
-                    ('NOTAM Identity', info.get('notam_facility_ident')),
-                    ('City', info.get('city')), 
-                    ('County', info.get('county')), 
-                    ('State', info.get('state')), 
-                    ('Region', info.get('region')), 
-                    ('Ownership', info.get('ownership')), 
-                    ('Elevation', info.get('elevation')),
-                    ('Magnetic Variation', info.get('magnetic_variation')), 
-                    ('VFR Sectional', info.get('vfr_sectional')), 
-                    ('Responsible ARTCC', info.get('responsible_artcc_name')), 
-                    ('Lighting Schedule', info.get('lighting_schedule')), 
-                    ('Beacon Schedule', info.get('beacon_schedule')),
-                    ('Military Landing Available', info.get('military_landing')),
-                    ('Military Joint Use', info.get('military_joint_use')),
-                    ('Control Tower', info.get('control_tower')),
-                    ('UNICOM', info.get('unicom')),
-                    ('CTAF', info.get('ctaf')),
-                    ('Latitude', info.get('latitude')), 
-                    ('Longitude', info.get('longitude')),
-                    ('Info Last Updated', info.get('effective_date'))
+                    ("NOTAM Identity", info.get("notam_facility_ident")),
+                    ("City", info.get("city")), 
+                    ("County", info.get("county")), 
+                    ("State", info.get("state")), 
+                    ("Region", info.get("region")), 
+                    ("Ownership", info.get("ownership")), 
+                    ("Elevation", info.get("elevation")),
+                    ("Magnetic Variation", info.get("magnetic_variation")), 
+                    ("VFR Sectional", info.get("vfr_sectional")), 
+                    ("Responsible ARTCC", info.get("responsible_artcc_name")), 
+                    ("Lighting Schedule", info.get("lighting_schedule")), 
+                    ("Beacon Schedule", info.get("beacon_schedule")),
+                    ("Military Landing Available", info.get("military_landing")),
+                    ("Military Joint Use", info.get("military_joint_use")),
+                    ("Control Tower", info.get("control_tower")),
+                    ("UNICOM", info.get("unicom")),
+                    ("CTAF", info.get("ctaf")),
+                    ("Latitude", info.get("latitude")), 
+                    ("Longitude", info.get("longitude")),
+                    ("Info Last Updated", info.get("effective_date"))
                 ]
 
-                Util.build_embed_fields(embed, name_values)
-                await command.get_channel().send(embed=embed)
+                Utility.build_embed_fields(embed, name_values)
+                await context.send(embed=embed)
 
-        elif Util.is_400(code):
-            await command.get_channel().send(embed=Util.create_simple_embed(f'No valid response. Perhaps the airport could not be found. ({code})', MessageType.NEGATIVE))
-            
-        else: # server error 500 or something else unknown
-            await command.get_channel().send(embed=Util.create_simple_embed(f'Something went wrong while getting a response. ({code})', MessageType.FATAL))
-            await Util.write_dev_log(self.bot, f'{code} error on {command.get_guild()} requesting `{query_url}`')
+        elif Utility.is_400(code):
+            await context.reply(Program.get_client_error_user_response(code))
+        else:
+            await context.reply(Program.get_server_error_user_response(code))
+            await Program.write_dev_log(Program.get_http_control_server_response(code, context, query_url))
 
 
     # https://openweathermap.org/current
-    @commands.command(name='weather', hidden=False, aliases=['w'],
-        brief='Get the current weather for a location',
-        usage='(zip [ZIP code] [country abbr]) OR (city [city], (state abbr), [country abbr])',
-        description='Get the current weather for a location')
+    @commands.command(name="weather", hidden=False, aliases=["w"],
+        brief="Get the current weather for a location",
+        usage="(zip [ZIP code] [country abbr]) OR (city [city], (state abbr), [country abbr])",
+        description="Get the current weather for a location")
     async def command_weather(self, context: commands.Context):
-        command = Command(context.message)
-        if not self.is_command_channel(context):
-            print(f'{command.get_part(0)} failed check. Aborting.')
+        if not Utility.is_valid_command_context(context, channel_type=self._default_channel_type, is_global_command=True, is_whisper_command=False):
             return
         
+        command = TextCommand(context)
         param = command.get_command_from(2)
         method = command.get_part(1).lower()
-        if not method in ['zip', 'city']:
-            await command.get_channel().send(embed=Util.create_simple_embed(f'Not valid syntax. See `>>help weather`.', MessageType.NEGATIVE))
+        if not method in ["zip", "city"]:
+            await context.reply(Program.get_help_instructions("weather"))
             return
 
-        search_query = 'q=' if method == 'city' else 'zip='
+        search_query = "q=" if method == "city" else "zip="
         search_query = search_query + param
-        query_url = f'https://api.openweathermap.org/data/2.5/weather?{search_query}&units=imperial&appid={os.getenv("OPENWEATHER_TOKEN")}'
-        (response, mime, code) = await Util.http_get_thinking(query_url, context)
+        query_url = f"https://api.openweathermap.org/data/2.5/weather?{search_query}&units=imperial&appid={os.getenv('OPENWEATHER_TOKEN')}"
+        (response, mime, code) = await Utility.http_get_thinking(query_url, context)
         
-        if (Tools.print_debug_if_needed(command, response)):
-            return
-        
-        if Util.is_200(code):
-            location = f'{response.get("name", "Unknown")}, {response.get("sys", {}).get("country", "Unknown")}'
+        if Utility.is_200(code):
+            location = f"{response.get('name', 'Unknown')}, {response.get('sys', {}).get('country', 'Unknown')}"
             url = None
-            coordinates = response.get('coord', {})
+            coordinates = response.get("coord", {})
             if coordinates:
-                url = f'https://www.ventusky.com/?p={coordinates.get("lat")};{coordinates.get("lon")};7&l=temperature-2m'
+                url = f"https://www.ventusky.com/?p={coordinates.get('lat')};{coordinates.get('lon')};7&l=temperature-2m"
 
-            embed = discord.Embed(title=f'Current Weather for {location}', url=url, color=MessageType.POSITIVE.value)
+            embed = discord.Embed(title=f"Current Weather for {location}", url=url, color=MessageType.POSITIVE.value)
 
             # get the appropriate icon, given by the API response
             # See https://openweathermap.org/weather-conditions
             name_values = []
-            weather_comp = response.get('weather', [{}])[0]
+            weather_comp = response.get("weather", [{}])[0]
             if weather_comp:
-                name_values.append(('Description', weather_comp.get('description', 'Unknown').capitalize(), False))
-                embed.set_thumbnail(url=f'https://openweathermap.org/img/wn/{weather_comp.get("icon", "01d")}@2x.png')
+                name_values.append(("Description", weather_comp.get("description", "Unknown").capitalize(), False))
+                embed.set_thumbnail(url=f"https://openweathermap.org/img/wn/{weather_comp.get('icon', '01d')}@2x.png")
 
             # get temperature stats
-            temperature_suffix = ' °F'
-            main_comp = response.get('main', {})
+            temperature_suffix = " °F"
+            main_comp = response.get("main", {})
             if main_comp:
-                name_values.append(('Temperature', f'{main_comp.get("temp")}{temperature_suffix}'))
-                name_values.append(('Feels Like', f'{main_comp.get("feels_like")}{temperature_suffix}'))
-                name_values.append(('Low', f'{main_comp.get("temp_min")}{temperature_suffix}'))
-                name_values.append(('High', f'{main_comp.get("temp_max")}{temperature_suffix}'))
-                name_values.append(('Pressure', f'{main_comp.get("pressure")} mb'))
-                name_values.append(('Humidity', f'{main_comp.get("humidity")}%'))
+                name_values.append(("Temperature", f"{main_comp.get('temp')}{temperature_suffix}"))
+                name_values.append(("Feels Like", f"{main_comp.get('feels_like')}{temperature_suffix}"))
+                name_values.append(("Low", f"{main_comp.get('temp_min')}{temperature_suffix}"))
+                name_values.append(("High", f"{main_comp.get('temp_max')}{temperature_suffix}"))
+                name_values.append(("Pressure", f"{main_comp.get('pressure')} mb"))
+                name_values.append(("Humidity", f"{main_comp.get('humidity')}%"))
 
             # get visibility
-            visibility = response.get('visibility')
+            visibility = response.get("visibility")
             if visibility != None:
-                visibility = f'{visibility}m' if visibility < 10000 else 'Greater than 10km'
-            name_values.append(('Visibility', visibility))
+                visibility = f"{visibility}m" if visibility < 10000 else "Greater than 10km"
+            name_values.append(("Visibility", visibility))
 
             # get wind conditions
-            wind = response.get('wind', {})
+            wind = response.get("wind", {})
             if wind:
-                speed = wind.get('speed', '?')
-                dir = wind.get('deg', '?')
-                gust = wind.get('gust')
-                wind_string = f'{Util.deg_to_compass(dir)} @ {speed} mph '
+                speed = wind.get("speed", "?")
+                dir = wind.get("deg", "?")
+                gust = wind.get("gust")
+                wind_string = f"{Utility.deg_to_compass(dir)} @ {speed} mph "
                 if gust: # do not append a gust mention if there is 0 gust, or if the field does not exist
-                    wind_string = wind_string + f' with gusts of {gust} mph'
-                name_values.append(('Winds', wind_string))
+                    wind_string = wind_string + f" with gusts of {gust} mph"
+                name_values.append(("Winds", wind_string))
 
-            clouds = response.get('clouds', {}).get('all')
+            clouds = response.get("clouds", {}).get("all")
             if clouds != None:
-                name_values.append(('Cloud Coverage', f'{clouds}%', False))
+                name_values.append(("Cloud Coverage", f"{clouds}%", False))
             
             # get the sunrise/sunset times
-            system_comp = response.get('sys', {})
+            system_comp = response.get("sys", {})
             if system_comp:
-                time_format = '%I:%M:%S %p'
-                sunrise = system_comp.get('sunrise', 0) + response.get('timezone', 0)
-                name_values.append(('Sunrise', datetime.datetime.utcfromtimestamp(sunrise).strftime(time_format), True))
-                sunset = system_comp.get('sunset', 0) + response.get('timezone', 0)
-                name_values.append(('Sunset', datetime.datetime.utcfromtimestamp(sunset).strftime(time_format), True))
+                time_format = "%I:%M:%S %p"
+                sunrise = system_comp.get("sunrise", 0)
+                name_values.append(("Sunrise", datetime.datetime.fromtimestamp(sunrise).strftime(time_format) + " PST", True))
+                sunset = system_comp.get("sunset", 0)
+                name_values.append(("Sunset", datetime.datetime.fromtimestamp(sunset).strftime(time_format) + " PST", True))
 
-            Util.build_embed_fields(embed, name_values)
-            await command.get_channel().send(embed=embed)
+            Utility.build_embed_fields(embed, name_values)
+            await context.send(embed=embed)
 
-        elif Util.is_400(code):
-            await command.get_channel().send(embed=Util.create_simple_embed(f'No valid response. Perhaps the input location could not be found. ({code})', MessageType.NEGATIVE))
-            
-        else: # server error 500 or something else unknown
-            await command.get_channel().send(embed=Util.create_simple_embed(f'Something went wrong while getting a response. ({code})', MessageType.FATAL))
-            await Util.write_dev_log(self.bot, f'{code} error on {command.get_guild()} requesting `{query_url}`')
-
-
-    # #####################################
-    # Print raw json if needed
-    # #####################################
-
-    def print_debug_if_needed(command: Command, response: dict | str):
-        if command.does_arg_exist('raw'):
-            import json
-            try:
-                with open(fr"logs/command.{command.get_part(0)}.output.json", "w") as file:
-                    json.dump(response, file, indent=4)
-                print("File written")
-            except:
-                print("Failed to write dump")
-            return True
+        elif Utility.is_400(code):
+            await context.reply(Program.get_client_error_user_response(code))
         else:
-            return False
+            await context.reply(Program.get_server_error_user_response(code))
+            await Program.write_dev_log(Program.get_http_control_server_response(code, context, query_url))

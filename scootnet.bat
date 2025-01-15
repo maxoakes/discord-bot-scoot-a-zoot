@@ -1,2 +1,2 @@
 title ScootNet
-py main.py bot
+py main.py gtrm !
