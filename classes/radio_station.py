@@ -1,4 +1,4 @@
-class MediaPreset():
+class RadioStation():
     name: str
     display_name: str
     url: str

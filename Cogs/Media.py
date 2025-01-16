@@ -3,29 +3,29 @@ import json
 import os
 import discord
 from discord.ext import commands
-from classes.media_preset import MediaPreset
+from classes.radio_station import RadioStation
 from classes.text_command import TextCommand
 from state import Program, Utility
 
 class MediaCog(commands.Cog):
     _default_channel_type: str
-    media_presets: dict[str, MediaPreset]
+    radio_stations: dict[str, RadioStation]
 
     def __init__(self):
         self._default_channel_type = "jukebox"
-        self.media_presets = {}
+        self.radio_stations = {}
             
 
     @commands.Cog.listener()
     async def on_ready(self):
         print(f"MediaCog.on_ready(): We have logged in as {Program.bot.user}")
 
-        filename = f"{Program.SETTINGS_DIRECTORY_PATH}/{Program.MEDIA_PRESETS_FILE_NAME}"
+        filename = f"{Program.SETTINGS_DIRECTORY_PATH}/{Program.RADIO_STATIONS_FILE_NAME}"
         if not os.path.exists(Program.SETTINGS_DIRECTORY_PATH):
             os.makedirs(Program.SETTINGS_DIRECTORY_PATH)
         if not os.path.isfile(filename):
-            self.write_media_presets()
-        self.load_media_presets()
+            self.write_radio_stations()
+        self.load_radio_stations()
 
 
     # #####################################
@@ -33,65 +33,68 @@ class MediaCog(commands.Cog):
     # #####################################
 
 
-    @commands.command(name="stream", aliases=["listen", "queue"], hidden=False, 
+    @commands.command(name="stream", aliases=["listen", "queue", "play"], hidden=False, 
         brief="Play some media",
         usage=f"[preset_name] ... NOTE: use preset command to get the list of available media")
     async def command_stream(self, context: commands.Context):
         if not Utility.is_valid_command_context(context, channel_type=self._default_channel_type, is_global_command=False, is_whisper_command=False):
             return
         
+        # Get the requested radio station name
         command = TextCommand(context)
         preset_name = command.get_part(1)
-        if not preset_name in self.media_presets.keys():
+        if not preset_name in self.radio_stations.keys():
             await context.reply(f"`{preset_name}` is not a media preset.")
             return
         
-        media_preset = self.media_presets.get(preset_name, None)
-        protocol = media_preset.url.split('://')[0].lower()
+        # Get the radio station url
+        radio_station = self.radio_stations.get(preset_name, None)
+        protocol = radio_station.url.split('://')[0].lower()
         if not protocol in Program.WHITELISTED_PROTOCOLS:
-            await context.send(f"Bad input. Must be a protocol in `{', '.join(Program.WHITELISTED_PROTOCOLS)}`")
+            await context.reply(f"Bad input. Must be a protocol in `{', '.join(Program.WHITELISTED_PROTOCOLS)}`")
             return
         
         # Find target voice channel
-        voice_state = context.author.voice
-        if voice_state == None:
-            await context.reply(f"No voice state")
-            return
         voice_channel = context.author.voice.channel
         if voice_channel == None:
             await context.reply("You must be in a voice channel")
             return
         
-        source = await self.get_stream_from_path(media_preset.url)
+        if context.voice_client and context.voice_client.is_playing():
+            print(f"Voice client in {context.guild.name} is already playing auto. Stopping to play another...")
+            context.voice_client.stop()
+
+        # Find the media and play
+        source = await self.get_stream_from_path(radio_station.url)
         await self.join(context, voice_channel)
         context.voice_client.play(source, after=lambda e: print(f"Player error: {e}") if e else None)
-        await context.send(f"Now playing: {media_preset.display_name}")
+        await context.send(f"Now playing: `{radio_station.display_name}`")
 
 
-    @commands.command(name='playlist', aliases=['pl'], hidden=False, brief='Show the playlist queue')
-    async def command_playlist(self, context: commands.Context):
-        if not Utility.is_valid_command_context(context, channel_type=self._default_channel_type, is_global_command=False, is_whisper_command=False):
-            return
-        
-        i = 1
-        queued_media: list[MediaPreset] = Program.guild_instances.get(context.guild.id).queued_media
-        for media in queued_media:
-            queue_text += f"{i}: {media.display_name}"
-            i = i + 1
-        embed = discord.Embed(title="Current Media Queue", description=queue_text)
-        await context.send(embed=embed)
-
-
-    @commands.command(name="presets", aliases=["preset"], hidden=False, brief="Show the list of available media presets")
-    async def command_presets(self, context: commands.Context):
+    @commands.command(name="stop", hidden=False, brief="Stop and disconnect radio station")
+    async def command_stop(self, context: commands.Context):
         if not Utility.is_valid_command_context(context, channel_type=self._default_channel_type, is_global_command=True, is_whisper_command=False):
             return
         
-        self.load_media_presets()
-        preset_list = ""
-        for key, preset in self.media_presets.items():
-            preset_list += f"{preset.name} ({preset.display_name}): {preset.url}\n"
-        await context.send(f"**The following presets are available when requesting media streams in the format `{Program.command_character}stream --preset=<preset_id_name>`:**\n```{preset_list}```")
+        if context.voice_client != None:
+            print(f"Voice client in {context.guild.name} is already playing auto. Stopping to play another...")
+            context.voice_client.stop()
+            await context.voice_client.disconnect()
+            await context.send(f"Turning off the radio station...")
+        else:
+            await context.reply(f"The radio is currently not playing.")
+        
+
+
+    @commands.command(name="stations", hidden=False, brief="Show the list of available radio stations")
+    async def command_stations(self, context: commands.Context):
+        if not Utility.is_valid_command_context(context, channel_type=self._default_channel_type, is_global_command=True, is_whisper_command=False):
+            return
+        
+        self.load_radio_stations()
+        station_list = list(map(lambda x: f"[{x[1].name}] {x[1].display_name}", self.radio_stations.items()))
+        station_string = "\n".join(station_list)
+        await context.send(f"**The following radio stations are available:**\n```{station_string} ```")
         
 
     # #########################
@@ -115,33 +118,33 @@ class MediaCog(commands.Cog):
                 return discord.FFmpegPCMAudio(source=source_string, executable=os.getenv('FFMPEG_PATH'), **Program.FFMPEG_OPTIONS)
             
 
-    def write_media_presets(self):
-        filename = f"{Program.SETTINGS_DIRECTORY_PATH}/{Program.MEDIA_PRESETS_FILE_NAME}"
-        data = {"presets": list(map(lambda x: x[1].as_dict(), self.media_presets.items()))}
+    def write_radio_stations(self):
+        filename = f"{Program.SETTINGS_DIRECTORY_PATH}/{Program.RADIO_STATIONS_FILE_NAME}"
+        data = {"presets": list(map(lambda x: x[1].as_dict(), self.radio_stations.items()))}
         
         with open(filename, "w") as file:
             json.dump(data, file, indent=4)
             print(f"Wrote to {filename} at {datetime.datetime.now()}")
                 
 
-    def load_media_presets(self) -> bool:
-        filename = f"{Program.SETTINGS_DIRECTORY_PATH}/{Program.MEDIA_PRESETS_FILE_NAME}"
+    def load_radio_stations(self) -> bool:
+        filename = f"{Program.SETTINGS_DIRECTORY_PATH}/{Program.RADIO_STATIONS_FILE_NAME}"
         if os.path.isfile(filename):
             with open(filename) as file:
                 settings = json.load(file)
-                media_presets = settings.get("presets", [])
-                for mp in media_presets:
+                radio_stations = settings.get("presets", [])
+                for mp in radio_stations:
                     preset_name = mp.get("name", None)
                     if preset_name != None:
-                        self.media_presets[preset_name] = MediaPreset(
+                        self.radio_stations[preset_name] = RadioStation(
                             mp.get("name"),
                             mp.get("display_name"),
                             mp.get("url"),
                             mp.get("is_opus")
                         )
                     else:
-                        print(f"Invalid MediaPreset from file: {preset_name}")
+                        print(f"Invalid RadioStation from file: {preset_name}")
                 print(f"Loaded {filename} at {datetime.datetime.now()}")
         else:
             print(f"Filepath does not exist: {filename}")
-            self.write_media_presets()
+            self.write_radio_stations()

@@ -1,5 +1,8 @@
 import datetime
+import re
 from time import mktime
+
+from state import Utility
 
 class ParsedFeedItem:
 
@@ -30,9 +33,9 @@ class ParsedFeedHeader:
         self.subtitle = feed.feed.get("subtitle", "")
         self.link = feed.feed.get("link", "about:blank")
         self.links = feed.feed.get("links", [])
-
         if "image" in feed.feed:
             self.image_url = feed.feed.image.get("url", "about:blank")
+
         self.items = []
         for entry in feed.entries:
             if entry.get("published", None) == None:
@@ -44,7 +47,7 @@ class ParsedFeedHeader:
             item.published = item.published.replace(tzinfo=datetime.timezone.utc)
             item.title = entry.get("title", "")
             item.link = entry.get("link", "about:blank")
-            item.summary = entry.get("summary", "")
+            item.summary = Utility.html_cleanse(entry.get("summary", ""))
             if entry.get("media_content", None) != None:
                 for media_object in entry.get("media_content"):
                     if media_object.get("medium", "image") == "image":

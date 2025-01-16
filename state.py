@@ -1,3 +1,5 @@
+import re
+import html
 import aiohttp
 import discord
 from discord.ext import commands
@@ -33,7 +35,7 @@ class Program:
     SETTINGS_DIRECTORY_PATH = "settings"
     GUILD_SETTINGS_DIRECTORY_PATH = f"{SETTINGS_DIRECTORY_PATH}/guilds"
     RSS_FEED_SETTINGS_FILE_NAME = "rss_feeds.json"
-    MEDIA_PRESETS_FILE_NAME = "media_presets.json"
+    RADIO_STATIONS_FILE_NAME = "radio_stations.json"
     MAX_NEW_RSS_STORIES_PER_CYCLE = 3
 
     bot: commands.Bot
@@ -174,6 +176,13 @@ class Utility:
         while output_name.find("-") == 0 or output_name.find(".") == 0 or output_name.find("_") == 0:
             output_name = output_name[1:]
         return output_name
+    
+    
+    def html_cleanse(raw_text: str) -> str:
+        delete_tags = re.compile("<.*?>")
+        xml_text = re.sub(delete_tags, "", raw_text)
+        escaped_text = html.unescape(xml_text)
+        return escaped_text
     
 
     def is_null_or_whitespace(input: str) -> bool:

@@ -265,4 +265,4 @@ class FeedCog(commands.Cog):
     def print_rss_settings_local_cache(self):
         print(f"RSS Settings -> last read: {self._last_read_date}")
         print(f"RSS Settings -> update rate: {self._update_rate}")
-        print(f"RSS Settings -> subscribers: {self._feed_subscribers.items()}")
+        print(f"RSS Settings -> feeds: {list(map(lambda x: x[1].as_dict(), self._feed_subscribers.items()))}")

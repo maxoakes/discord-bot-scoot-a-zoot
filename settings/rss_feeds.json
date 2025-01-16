@@ -1,10 +1,17 @@
 {
-    "last_read": "2025-01-15T05:30:36.150453+00:00",
+    "last_read": "2025-01-16T05:13:17.200938+00:00",
     "update_rate": 1800,
     "feed_subscribers": [
         {
             "feed_name": "dn",
             "feed_url": "https://www.democracynow.org/democracynow.rss",
+            "subscribing_channels": [
+                1328225114440863815
+            ]
+        },
+        {
+            "feed_name": "dsn",
+            "feed_url": "https://api.substack.com/feed/podcast/2510348/s/153051.rss",
             "subscribing_channels": [
                 1328225114440863815
             ]
