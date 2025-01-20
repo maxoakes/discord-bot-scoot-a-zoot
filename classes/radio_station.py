@@ -10,6 +10,7 @@ class RadioStation():
         self.url = url
         self.is_opus = is_opus
 
+
     def as_dict(self):
         return {
             "name": self.name,

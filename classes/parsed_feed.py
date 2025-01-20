@@ -16,7 +16,7 @@ class ParsedFeedItem:
     def __init__(self):
         self.image_urls = []
         self.video_urls = []
-        pass
+
 
 class ParsedFeedHeader:
 
@@ -33,6 +33,7 @@ class ParsedFeedHeader:
         self.subtitle = feed.feed.get("subtitle", "")
         self.link = feed.feed.get("link", "about:blank")
         self.links = feed.feed.get("links", [])
+        self.image_url = None
         if "image" in feed.feed:
             self.image_url = feed.feed.image.get("url", "about:blank")
 

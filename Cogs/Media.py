@@ -9,10 +9,12 @@ from state import Program, Utility
 
 class MediaCog(commands.Cog):
     _default_channel_type: str
+    _settings_filename: str
     radio_stations: dict[str, RadioStation]
 
     def __init__(self):
         self._default_channel_type = "jukebox"
+        self._settings_filename = f"{Program.SETTINGS_DIRECTORY_PATH}/{Program.RADIO_STATIONS_FILE_NAME}"
         self.radio_stations = {}
             
 
@@ -20,18 +22,31 @@ class MediaCog(commands.Cog):
     async def on_ready(self):
         print(f"MediaCog.on_ready(): We have logged in as {Program.bot.user}")
 
-        filename = f"{Program.SETTINGS_DIRECTORY_PATH}/{Program.RADIO_STATIONS_FILE_NAME}"
-        if not os.path.exists(Program.SETTINGS_DIRECTORY_PATH):
-            os.makedirs(Program.SETTINGS_DIRECTORY_PATH)
-        if not os.path.isfile(filename):
-            self.write_radio_stations()
-        self.load_radio_stations()
+        if Program.use_database:
+            self.load_radio_stations_from_database()
+            print(f"\tLoaded {len(self.radio_stations)} saved radio stations from database.")
+        else:
+            if not os.path.exists(Program.SETTINGS_DIRECTORY_PATH):
+                os.makedirs(Program.SETTINGS_DIRECTORY_PATH)
+
+            # check if the radio stations settings file exists
+            if not os.path.exists(self._settings_filename):
+                # if it does not, create the file
+                self.write_radio_stations_to_json()
+                print(f"\tCreated empty {Program.RADIO_STATIONS_FILE_NAME}.")
+            else:
+                # if it does read it and load
+                self.load_radio_stations_from_json()
+                print(f"\tLoaded {len(self.radio_stations)} saved radio station(s) from json file.")
+
+        # show radio stations in console
+        for n, r in self.radio_stations.items():
+            print(f"\t{n}: {json.dumps(r.as_dict())}")
 
 
     # #####################################
     # Commands
     # #####################################
-
 
     @commands.command(name="stream", aliases=["listen", "queue", "play"], hidden=False, 
         brief="Play some media",
@@ -60,14 +75,15 @@ class MediaCog(commands.Cog):
             await context.reply("You must be in a voice channel")
             return
         
-        if context.voice_client and context.voice_client.is_playing():
-            print(f"Voice client in {context.guild.name} is already playing auto. Stopping to play another...")
-            context.voice_client.stop()
+        async with context.typing():
+            if context.voice_client and context.voice_client.is_playing():
+                print(f"\tVoice client in {context.guild.name} is already playing auto. Stopping to play another...")
+                context.voice_client.stop()
 
-        # Find the media and play
-        source = await self.get_stream_from_path(radio_station.url)
-        await self.join(context, voice_channel)
-        context.voice_client.play(source, after=lambda e: print(f"Player error: {e}") if e else None)
+            # Find the media and play
+            source = await self.get_stream_from_path(radio_station.url)
+            await self.join(context, voice_channel)
+            context.voice_client.play(source, after=lambda e: print(f"\tPlayer error: {e}") if e else None)
         await context.send(f"Now playing: `{radio_station.display_name}`")
 
 
@@ -77,7 +93,7 @@ class MediaCog(commands.Cog):
             return
         
         if context.voice_client != None:
-            print(f"Voice client in {context.guild.name} is already playing auto. Stopping to play another...")
+            print(f"\tVoice client in {context.guild.name} is already playing auto. Stopping to play another...")
             context.voice_client.stop()
             await context.voice_client.disconnect()
             await context.send(f"Turning off the radio station...")
@@ -85,17 +101,19 @@ class MediaCog(commands.Cog):
             await context.reply(f"The radio is currently not playing.")
         
 
-
-    @commands.command(name="stations", hidden=False, brief="Show the list of available radio stations")
+    @commands.command(name="stations", hidden=False, brief="Refresh local cache from disk and display them")
     async def command_stations(self, context: commands.Context):
         if not Utility.is_valid_command_context(context, channel_type=self._default_channel_type, is_global_command=True, is_whisper_command=False):
             return
         
-        self.load_radio_stations()
+        if Program.use_database:
+            self.load_radio_stations_from_database()
+        else:
+            self.load_radio_stations_from_json()
         station_list = list(map(lambda x: f"[{x[1].name}] {x[1].display_name}", self.radio_stations.items()))
         station_string = "\n".join(station_list)
         await context.send(f"**The following radio stations are available:**\n```{station_string} ```")
-        
+
 
     # #########################
     # Helper Functions
@@ -118,33 +136,37 @@ class MediaCog(commands.Cog):
                 return discord.FFmpegPCMAudio(source=source_string, executable=os.getenv('FFMPEG_PATH'), **Program.FFMPEG_OPTIONS)
             
 
-    def write_radio_stations(self):
-        filename = f"{Program.SETTINGS_DIRECTORY_PATH}/{Program.RADIO_STATIONS_FILE_NAME}"
+    # #########################
+    # I/O functions
+    # #########################
+
+    def write_radio_stations_to_json(self):
         data = {"presets": list(map(lambda x: x[1].as_dict(), self.radio_stations.items()))}
-        
-        with open(filename, "w") as file:
+        with open(self._settings_filename, "w") as file:
             json.dump(data, file, indent=4)
-            print(f"Wrote to {filename} at {datetime.datetime.now()}")
+            print(f"\tWrote to {self._settings_filename} at {datetime.datetime.now()}")
                 
 
-    def load_radio_stations(self) -> bool:
-        filename = f"{Program.SETTINGS_DIRECTORY_PATH}/{Program.RADIO_STATIONS_FILE_NAME}"
-        if os.path.isfile(filename):
-            with open(filename) as file:
-                settings = json.load(file)
-                radio_stations = settings.get("presets", [])
-                for mp in radio_stations:
-                    preset_name = mp.get("name", None)
-                    if preset_name != None:
-                        self.radio_stations[preset_name] = RadioStation(
-                            mp.get("name"),
-                            mp.get("display_name"),
-                            mp.get("url"),
-                            mp.get("is_opus")
-                        )
-                    else:
-                        print(f"Invalid RadioStation from file: {preset_name}")
-                print(f"Loaded {filename} at {datetime.datetime.now()}")
-        else:
-            print(f"Filepath does not exist: {filename}")
-            self.write_radio_stations()
+    def load_radio_stations_from_json(self) -> bool:
+        with open(self._settings_filename) as file:
+            settings = json.load(file)
+            radio_stations = settings.get("presets", [])
+            self.radio_stations.clear()
+            for mp in radio_stations:
+                preset_name = mp.get("name", None)
+                if preset_name != None:
+                    self.radio_stations[preset_name] = RadioStation(mp.get("name"), mp.get("display_name"), mp.get("url"), mp.get("is_opus"))
+                else:
+                    print(f"\tInvalid RadioStation from file: {preset_name}")
+            print(f"\tLoaded {self._settings_filename} at {datetime.datetime.now()}")
+
+
+    def update_radio_station_to_database(self, name: str, display_name: str, url: str, opus: bool):
+        return Program.call_procedure_return_scalar("insert_or_update_radio_station", (name, display_name, url, opus))
+    
+
+    def load_radio_stations_from_database(self):
+        rows = Program.run_query_return_rows("SELECT unique_name, display_name, url, is_opus FROM radio_stations")
+        self.radio_stations.clear()
+        for unique_name, display_name, url, is_opus in rows:
+            self.radio_stations[unique_name] = RadioStation(unique_name, display_name, url, is_opus)

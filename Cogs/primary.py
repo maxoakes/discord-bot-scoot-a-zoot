@@ -1,4 +1,5 @@
 import datetime
+import json
 import discord
 import os
 from discord.ext import commands
@@ -19,25 +20,40 @@ class PrimaryCog(commands.Cog):
     @commands.Cog.listener()
     async def on_ready(self):
         print(f"MainCog.on_ready(): We have logged in as {Program.bot.user}")
-        
-        if not os.path.exists(Program.GUILD_SETTINGS_DIRECTORY_PATH):
-            os.makedirs(Program.GUILD_SETTINGS_DIRECTORY_PATH)
 
-        for guild in Program.bot.guilds:
-            # Check if the guild server has a settings file
-            if os.path.exists(fr"{Program.GUILD_SETTINGS_DIRECTORY_PATH}/{guild.id}.json"):
-                # If so, load it
-                guild_instance = GuildInstance(guild.id)
-                guild_instance.load_settings_file()
-                Program.guild_instances[guild.id] = guild_instance
+        if Program.use_database:
+            self.load_guilds_from_database()
+            print(f"\tLoaded {len(Program.guild_instances)} saved guild(s) from database.")
+        else:
+            # make the settings directory if it does not exist
+            if not os.path.exists(Program.SETTINGS_DIRECTORY_PATH):
+                os.makedirs(Program.SETTINGS_DIRECTORY_PATH)
+
+            # check if the guild settings file exists
+            if not os.path.exists(f"{Program.SETTINGS_DIRECTORY_PATH}/{Program.GUILD_SETTINGS_FILE_NAME}"):
+                # if it does not, create the file
+                self.write_guilds_to_json()
+                print(f"\tCreated empty {Program.GUILD_SETTINGS_FILE_NAME}.")
             else:
-                guild_instance = GuildInstance(guild.id)
-                guild_instance.write_settings_file()
+                # if it does read it and load
+                self.load_guilds_from_json()
+                print(f"\tLoaded {len(Program.guild_instances)} saved guild(s) from json file.")
+
+        # show guilds in console
+        for i, g in Program.guild_instances.items():
+            print(f"\t{i}: {json.dumps(g.as_dict())}")
+
+        # iterate through all connected guilds and add them to the guild instance list
+        for guild in Program.bot.guilds:
+            if Program.guild_instances.get(guild.id, None) == None:
+                Program.guild_instances[guild.id] = GuildInstance(guild.id)
+                print(f"\tAdded {guild} to internal guild_instance dict.")
             
 
     @commands.Cog.listener()
     async def on_guild_join(self, guild: discord.Guild):
-        print(f"We have logged in as {Program.bot.user}. on_guild_join")
+        print(f"\tWe have logged in as {Program.bot.user} to {guild.name}.")
+        Program.guild_instances[guild.id] = GuildInstance(guild.id)
         pass
 
 
@@ -46,7 +62,7 @@ class PrimaryCog(commands.Cog):
         pass
 
 
-    @commands.command(name="setchannel", hidden=True, 
+    @commands.command(name="setchannel", hidden=False, 
         brief="Set the channel that bot command responses will be sent to", 
         usage=f"[channel_type] [channel_id] ... NOTE: channel_type must be one of the following: [{','.join(Program.CHANNEL_TYPES)}]")
     async def command_setchannel(self, context: commands.Context):
@@ -56,23 +72,51 @@ class PrimaryCog(commands.Cog):
             await context.reply(f"Fuck off. You are not an admin.")
         else:
             command = TextCommand(context)
-
-            if len(command.get_all_parts()) == 3:
-                channel_type = command.get_part(1)
-                if channel_type in Program.CHANNEL_TYPES:
-                    channel = Program.bot.get_channel(int(command.get_part(2)))
-                    if (channel is not None):
-                        await self.assign_channel(channel.guild, channel_type, channel)
-                        await context.reply(f"Got it. I will use {channel.mention} for `{channel_type}` messages.")
-                    else:
-                        await context.reply(f"`{command.get_part(2)}` is not a valid channel ID.")
-                else:
-                    await context.reply(Program.get_help_instructions("setchannel"))
-            else:
+            # show instructions if wrong syntax
+            if len(command.get_all_parts()) != 3:
                 await context.reply(Program.get_help_instructions("setchannel"))
+                return
+            
+            # show instructions if invalid channel type
+            channel_type = command.get_part(1)
+            if not channel_type in Program.CHANNEL_TYPES:
+                await context.reply(Program.get_help_instructions("setchannel"))
+                return
+            
+            # return if channel is not valid
+            channel = Program.bot.get_channel(int(command.get_part(2)))
+            if channel == None:
+                await context.reply(f"`{command.get_part(2)}` is not a valid channel ID.")
+                return
+            
+            # if the command is all valid
+            async with context.typing():
+                guild_id = channel.guild.id
+                channel_id = channel.id
+
+                if guild_id in Program.guild_instances:
+                    Program.guild_instances[guild_id].set_channel_type(channel_type, channel_id)
+                    print(f"\tUpdated existing guild {channel.guild.name} with {channel_type} channel as {channel_id}")
+                else:
+                    new_guild_instance = GuildInstance(guild_id)
+                    new_guild_instance.set_channel_type(channel_type, channel_id)
+                    Program.guild_instances[guild_id] = new_guild_instance
+                    print(f"\tWrote new guild {channel.guild.name} using {channel_type}:{channel_id}")
+
+                # save change to disk
+                if Program.use_database:
+                    result = self.update_guilds_to_database(guild_id, channel_type, channel_id)
+                    if result != 1:
+                        await context.reply(f"Something went wrong ({result})")
+                        return
+                else:
+                    self.write_guilds_to_json()
+
+            # final response to user
+            await context.reply(f"Got it. I will use {channel.mention} for `{channel_type}` messages.")                   
 
 
-    @commands.command(name="getchannels", hidden=True, brief="Get your server's list of command-like channels")
+    @commands.command(name="getchannels", hidden=False, brief="Get your server's list of command-like channels")
     async def command_getchannel(self, context: commands.Context):
         if not Utility.is_valid_command_context(context, channel_type=self._default_channel_type, is_global_command=True, is_whisper_command=False):
             return
@@ -85,7 +129,7 @@ class PrimaryCog(commands.Cog):
             await context.reply(message_string)
         
 
-    @commands.command(name="checkchannel", hidden=True, brief="Check if the current channel is of the specified type")
+    @commands.command(name="checkchannel", hidden=False, brief="Check if the current channel is of the specified type")
     async def command_checkchannel(self, context: commands.Context):
         command = TextCommand(context)
         channel_type = command.get_part(1)
@@ -95,7 +139,7 @@ class PrimaryCog(commands.Cog):
             await context.reply("`pass`")
 
 
-    @commands.command(name="ping", hidden=True, brief="Get a response")
+    @commands.command(name="ping", hidden=False, brief="Get a response")
     async def command_ping(self, context: commands.Context):
         if not Utility.is_valid_command_context(context, channel_type=self._default_channel_type, is_global_command=True, is_whisper_command=True):
             return
@@ -120,7 +164,7 @@ class PrimaryCog(commands.Cog):
                 return
             
             self._cls_running = True
-            print(f"Working to delete messages from {context.channel.name}...")
+            print(f"\tWorking to delete messages from {context.channel.name}...")
             await context.send(f"Working to delete messages. This may take a while...")
             deleted: list[discord.Message] = await context.channel.purge(oldest_first=True)
 
@@ -153,9 +197,9 @@ class PrimaryCog(commands.Cog):
                             "application": m.application
                         }.items())))
                     json.dump(output_list, file, indent=4)
-                print("Channel message dump file written")
+                print("\tChannel message dump file written")
             except Exception as e:
-                print(f"Failed to write dump: {e}")
+                print(f"\tFailed to write dump: {e}")
                 await context.send("Failed creating dump of messages. Exiting command...")
                 self._cls_running = False
                 return
@@ -168,20 +212,39 @@ class PrimaryCog(commands.Cog):
 
 
     # #########################
-    # Helper Functions
+    # I/O functions
     # #########################
 
-    async def assign_channel(self, guild: discord.Guild, channel_type: str, channel: discord.TextChannel) -> bool:
-        guild_id = guild.id
-        channel_id = channel.id
+    def write_guilds_to_json(self):
+        filepath = fr"{Program.SETTINGS_DIRECTORY_PATH}/{Program.GUILD_SETTINGS_FILE_NAME}"
+        package = {k: v.as_dict() for k, v in Program.guild_instances.items()}
+        with open(filepath, "w") as file:
+            json.dump(package, file, indent=4)
+        print(f"\tWrote to {filepath} at {datetime.datetime.now()}")
 
-        if guild_id in Program.guild_instances:
-            Program.guild_instances[guild_id].set_channel_type(channel_type, channel_id)
-            print(f"Updated existing guild {guild.name} with {channel_type}:{channel_id}")
-        else:
-            new_guild_instance = GuildInstance(guild_id)
-            new_guild_instance.set_channel_type(channel_type, channel_id)
-            Program.guild_instances[guild_id] = new_guild_instance
-            print(f"Wrote new guild {guild.name} using {channel_type}:{channel_id}")
+    
+    def load_guilds_from_json(self):
+        filepath = fr"{Program.SETTINGS_DIRECTORY_PATH}/{Program.GUILD_SETTINGS_FILE_NAME}"
+        with open(filepath) as file:
+            settings = json.load(file)
+            Program.guild_instances.clear()
+            for guild_id, raw_dict in settings:
+                guild_instance = GuildInstance(guild_id)
+                for channel_type, channel_id in raw_dict.items():
+                    guild_instance.set_channel_type(channel_type, channel_id)
+                Program.guild_instances[guild_id] = guild_instance
 
-        Program.guild_instances[guild_id].write_settings_file()
+
+    def update_guilds_to_database(self, guild_id, channel_type, channel_id):
+        return Program.call_procedure_return_scalar("insert_or_update_guild_channel", (guild_id, channel_type, channel_id))
+    
+
+    def load_guilds_from_database(self):
+        rows = Program.run_query_return_rows("SELECT guild_id, channel_type, channel_id FROM guild_channels")
+        for guild_id, channel_type, channel_id in rows:
+            if Program.guild_instances.get(guild_id):
+                Program.guild_instances[guild_id].set_channel_type(channel_type, channel_id)
+            else:
+                guild_instance = GuildInstance(guild_id)
+                guild_instance.set_channel_type(channel_type, channel_id)
+                Program.guild_instances[guild_id] = guild_instance

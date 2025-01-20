@@ -33,22 +33,30 @@ class Program:
     WHITELISTED_PROTOCOLS = ["http", "https", "file", "tcp", "udp", "rtp"]
     FILE_PROTOCOL_PREFIX = "file"
     SETTINGS_DIRECTORY_PATH = "settings"
-    GUILD_SETTINGS_DIRECTORY_PATH = f"{SETTINGS_DIRECTORY_PATH}/guilds"
+    GUILD_SETTINGS_FILE_NAME = "guilds.json"
     RSS_FEED_SETTINGS_FILE_NAME = "rss_feeds.json"
     RADIO_STATIONS_FILE_NAME = "radio_stations.json"
     MAX_NEW_RSS_STORIES_PER_CYCLE = 3
+    RSS_FEED_UPDATE_TIMER = 60*30
 
     bot: commands.Bot
     guild_instances: dict[int, object]
     command_character: str
     control_channel_id: int
+    owner_admin_id: int
+    use_database: bool
+    db_config = dict
 
 
-    def initialize(command_char: str, control_channel_id: int) -> None:
+    def initialize(command_char: str, control_channel_id: int, owner_admin_id: int, use_database: bool, db_config: dict) -> None:
         Program.command_character = command_char
         Program.bot = commands.Bot(command_prefix=command_char, intents=discord.Intents.all())
         Program.guild_instances = {}
         Program.control_channel_id = control_channel_id
+        Program.owner_admin_id = owner_admin_id
+        Program.use_database = use_database
+        if Program.use_database:
+            Program.db_config = db_config
 
 
     def get_help_instructions(command_name) -> str:
@@ -70,18 +78,69 @@ class Program:
         return return_string
 
 
-    def get_control_channel():
-        return Program.bot.get_channel(Program.control_channel_id)
-
-
     async def write_dev_log(text: str, embed: discord.Embed | None = None):
-        channel = Program.get_control_channel()
+        channel = Program.bot.get_channel(Program.control_channel_id)
         if channel is None:
-            print("Cannot find dev channel. Nothing will be written.")
+            print("\tCannot find dev channel. Nothing will be written.")
             return
         await channel.send(content=text, embed=embed)
-        print(f"Control channel message: {text}")
+        print(f"\tControl channel message: {text}")
 
+
+    def connect_to_mysql(config, attempts=3, delay=2):
+        import mysql.connector
+        import time
+        attempt = 1
+        # Implement a reconnection routine
+        while attempt < attempts + 1:
+            try:
+                return mysql.connector.connect(**config)
+            except (mysql.connector.Error, IOError) as err:
+                if (attempts is attempt):
+                    # Attempts to reconnect failed; returning None
+                    print("Failed to connect, exiting without a connection: %s", err)
+                    return None
+                print(
+                    "Connection failed: %s. Retrying (%d/%d)...",
+                    err,
+                    attempt,
+                    attempts-1,
+                )
+                # progressive reconnect delay
+                time.sleep(delay ** attempt)
+                attempt += 1
+        return None
+    
+
+    def run_query_return_rows(select_statement: str, arguments: tuple = ()):
+        connection = Program.connect_to_mysql(Program.db_config)
+        if connection and connection.is_connected():
+            data = []
+            try:
+                with connection.cursor(buffered=True) as cursor:
+                    cursor.execute(select_statement, arguments)
+            finally:
+                connection.close()
+            return cursor.fetchall()
+        else:
+            print(f"Failed to call [{select_statement}]")
+            return data
+        
+
+    def call_procedure_return_scalar(procedure: str, arguments: tuple):
+        connection = Program.connect_to_mysql(Program.db_config)
+        connection.autocommit = True
+        if connection and connection.is_connected():
+            try:
+                with connection.cursor() as cursor:
+                    cursor.callproc(procedure, arguments)
+            finally:
+                connection.close()
+            return cursor.rowcount
+        else:
+            print(f"Failed to call {procedure}")
+            return 0
+        
 
 class Utility:
     def is_valid_command_context(context: commands.Context | None, channel_type="command", is_global_command=True, is_whisper_command=False) -> bool:
@@ -100,11 +159,6 @@ class Utility:
                 else:
                     print(f"Incorrect channel {Program.guild_instances[context.guild.id].get_channel(channel_type)}")
                     return False
-        
-
-    def create_simple_embed(text="Placeholder Text", type=MessageType.POSITIVE) -> discord.Embed:
-        embed = discord.Embed(description=text, color=type.value)
-        return embed
     
 
     async def http_get_thinking(url: str, context: commands.Context) -> tuple[dict | str, ResponseType, int]:
@@ -166,16 +220,6 @@ class Utility:
     
     def is_500(code: int) -> bool:
         return code >= 500 and code < 600
-    
-
-    def sanitize_file_name(input_name: str) -> str:
-        invalid_chars = "#%&{}/$! \":<>*?/+`|=\\@'"
-        output_name = input_name
-        for char in invalid_chars:
-            output_name = output_name.replace(char, "")
-        while output_name.find("-") == 0 or output_name.find(".") == 0 or output_name.find("_") == 0:
-            output_name = output_name[1:]
-        return output_name
     
     
     def html_cleanse(raw_text: str) -> str:

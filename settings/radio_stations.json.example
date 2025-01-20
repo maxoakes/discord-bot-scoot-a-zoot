@@ -1,0 +1,10 @@
+{
+    "presets": [
+        {
+            "name": "npr",
+            "display_name": "NPR: National Public Radio",
+            "url": "https://npr-ice.streamguys1.com/live.mp3",
+            "is_opus": true
+        }
+    ]
+}
