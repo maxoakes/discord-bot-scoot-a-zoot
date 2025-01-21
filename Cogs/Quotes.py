@@ -1,96 +1,93 @@
+import datetime
 import discord
 from discord.ext import commands
-from classes.Quote import Quote
-from Program.Command import Command
-from Util import MessageType, Util
+from classes.quote import Quote
+from classes.text_command import TextCommand
+from state import Program, Utility
 
-class Quotes(commands.Cog):
+class QuoteCog(commands.Cog):
 
-    possible_channel_names: list
-    bot: discord.Bot
+    _default_channel_type: str
 
-    def __init__(self, bot):
-        self.bot = bot
+    def __init__(self):
+        self._default_channel_type = "command"
 
 
     @commands.Cog.listener()
     async def on_ready(self):
-        print(f"READY! Initialized Tools cog.")
+        print(f"Quotes.on_ready(): We have logged in as {Program.bot.user}")
 
 
-    # #####################################
-    # Manual Checks (does not use built-in cog command checks)
-    # #####################################
-
-    def is_command_channel(self, context: commands.Context):
-        return isinstance(context.channel, discord.channel.DMChannel) or context.channel.id == Util.DEFAULT_COMMAND_CHANNEL[context.guild.id]
-
-
-    @commands.command(name='quote', aliases=['q'], hidden=False, 
+    @commands.command(name="quote", aliases=["q"], hidden=False, 
         brief='Create a quote from a user',
-        usage='<direct [quote in quotations] -[author](, time)(, location) OR <add --quote=[quote without quotations] (--author=[author]) (--location=[location]) (--time=[time])>',
+        usage='<add `[quote in quotations] -[author](, time)(, location)`> OR <help>',
         description='Create a quote to add it to the database')
     async def command_quote(self, context: commands.Context):
-        command = Command(context.message)        
-        if not (self.is_command_channel(context) and context.channel.permissions_for(context.author).kick_members): # kicking seems like an appropriate equivalent trust level
-            print(f'{command.get_part(0)} failed permission check. Aborting.')
+        if not Utility.is_valid_command_context(context, channel_type=self._default_channel_type, is_global_command=True, is_whisper_command=False):
             return
-
-        def check_channel_response(m): # checking if it's the same user and channel
-            return m.author == command.get_author() and m.channel == command.get_channel()
         
-        add_to_db = False
-        quote: Quote
-        # match the verb of the command
+        command = TextCommand(context)
+        
         match command.get_part(1):
-            # create a quote carefully using flags
             case 'add' | 'a':
-                add_to_db = True
-                quote = Quote(command.get_author().name,
-                    quote=command.get_arg('quote', default='<No content>').replace('"', '').replace("'", ''), 
-                    author=command.get_arg('author', default='Anonymous'), 
-                    location=command.get_arg('location'), 
-                    time=command.get_arg('time'))
+                quote_objects: list[Quote] = []
+                input = command.get_command_from(2)
+                input = input.replace("```","`") # If the user did the full code block format, change it back to inline code
+                markdown_positions = [i for i, char in enumerate(input) if char == "`"]
+                if len(markdown_positions) % 2 == 1:
+                    context.reply("Not a valid input (odd number of code markdown characters)")
+                    return
                 
-            # create a quote like one would do if they were writing text
-            case 'direct' | 'd':
-                add_to_db = True
-                quote = Quote(command.get_author().name, perform_parse=True, raw=command.get_command_from(2))
+                raw_quotes: list[str] = []
+                markdown_pairs = list(zip(markdown_positions[::2], markdown_positions[1::2]))
+                for start, end in markdown_pairs:
+                    raw_quotes.append(input[start+1:end])
 
-            # get a quote from a database
-            case 'get' | 'g':
-                # TODO implement SQL select query to local DB
-                pass
+                for quote in raw_quotes:
+                    quote_objects.append(Quote.parse_from_raw(quote))
 
-            # unknown command
+                # confirm the quote to add, and wait for reply
+                question_message = await context.reply(f"**Is this correct?** (y/n)", embeds=list(map(lambda x: x.get_embed(), quote_objects)))
+                try:
+                    def reply_check(message: discord.Message):
+                        return message.author == context.author and message.channel == context.channel and message.content.lower().strip() in Program.AFFIRMATIVE_RESPONSE
+    
+                    await Program.bot.wait_for('message', check=reply_check, timeout=Program.CONFIRMATION_TIME)
+                    
+
+                    async with context.typing():
+                        hash = context.message.created_at.__hash__() ^ context.guild.__hash__()
+                        print(f"\tAdding to database: with hash {hash} -> {list(map(lambda x: str(x), quote_objects))}")
+                        i = 0
+                        for quote_object in quote_objects:
+                            i = i + 1
+                            result = Program.call_procedure_return_scalar("insert_quote_with_set_id", (hash, i, context.guild.id, quote_object.quote, quote_object.author, quote_object.time_place))
+                            print(f"\tinsert_quote_with_set_id -> {result} at {datetime.datetime.now()}")
+
+                    await context.reply(f"Your quote has been added to the database.")
+                except:
+                    await context.reply(f"No positive response recieved. No quote will be added.")
+
+            case "random" | "r" | "get" | "g":
+                import random
+                async with context.typing():
+                    conversation_ids = Program.run_query_return_rows("SELECT DISTINCT set_id FROM discord.quotes WHERE guild_id=(%s)", (context.guild.id,))
+                    choices = list(sum(conversation_ids, ()))
+                    chosen = random.choice(choices)
+
+                    chosen_quotes: list[Quote] = []
+
+                    quote_set_rows = Program.run_query_return_rows("SELECT quote, author, time_place FROM discord.quotes WHERE set_id=(%s) ORDER BY ordering", (chosen,))
+                    for quote_string, quote_author, quote_time_place in quote_set_rows:
+                        chosen_quotes.append(Quote(quote_string, quote_author, quote_time_place))
+
+                    message_content = "\n".join(list(map(lambda x: f"> # {x.get_markdown_string()}", chosen_quotes)))
+                await context.send(f"Quote of the day:\n{message_content}")
+                    
+            # unknown command or help
             case _:
-                await command.get_message().channel.send(content=command.get_author().mention, 
-                    embed=Util.create_simple_embed(f"This is not a valid command. Please consult `{Util.get_command_char()}help quote`", MessageType.NEGATIVE))
+                await context.reply("To use this command, utilize the `code` markdown to encompass the quote. Everything inside the single backtick characters will be parsed"
+                                    "```!quote add `\"This is a quote\" -Scouter` ```")
+                
 
-        # add to the database if the action calls for it
-        if add_to_db:
-            if quote.is_bad():
-                await command.get_message().channel.send(content=command.get_author().mention, 
-                    embed=Util.create_simple_embed(f"Your quote was malformed. Please consult `{Util.get_command_char()}help quote`", MessageType.FATAL))
-                return
-            
-            # confirm the quote to add, and wait for reply
-            await command.get_message().channel.send(f"**{command.get_author().mention}, Is this correct?** (y/n)", embed=quote.get_embed())
-            try:
-                response: discord.Message = await commands.wait_for('message', check=check_channel_response, timeout=Util.CONFIRMATION_TIME)
 
-                # check if there is an affirmative response from the same person
-                if response.content.lower().strip() in Util.AFFIRMATIVE_RESPONSE and command.get_author().id == response.author.id:
-                    # TODO implement insert query to local DB
-                    await command.get_message().channel.send(content=f'{command.get_author().mention}, (Not implemented) this quote has been added to the database:')
-                    await Util.write_dev_log(self.bot, f'A quote was added to the database by {quote.get_creator()}.')
-                else:
-                    await command.get_message().channel.send(content=f'{command.get_author().mention}, no affirmative response was provided. This quote will **not** be added to the database:')
-
-            except TimeoutError:
-                await command.get_message().channel.send(content=f'{command.get_author().mention}, no response was provided. This quote will **not** be added to the database:')
-                return
-            
-        # send message to channel if there is a quote that came about this message
-        if not quote.is_bad():
-            await command.get_message().channel.send(f"> {quote}")

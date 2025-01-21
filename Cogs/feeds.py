@@ -70,12 +70,12 @@ class FeedCog(commands.Cog):
             feed = ParsedFeedHeader(feedparser.parse(url))
 
             new_items: list[ParsedFeedItem] = list(filter(lambda x: datetime.datetime.timestamp(x.published) > datetime.datetime.timestamp(self.last_read_date), feed.items))
-            new_items = new_items[0:Program.MAX_NEW_RSS_STORIES_PER_CYCLE] # spam spam prevention
+            new_items = new_items[0:Program.MAX_NEW_RSS_STORIES_PER_CYCLE] # spam prevention
             print(f"\tParsing {len(new_items)} items from '{feed.title}'. Published after {self.last_read_date} with timestamp({datetime.datetime.timestamp(self.last_read_date)})")
             for item in new_items:
                 print(f"\t\tPreparing story published {item.published} with timestamp({datetime.datetime.timestamp(item.published)})")
                 embed = discord.Embed(
-                    title=f"{feed.title.capitalize()} --- {item.title}",
+                    title=f"{feed.title.upper()} --- {item.title}",
                     color=MessageType.PLAYLIST_ITEM.value,
                     url=item.link,
                     description=item.summary)

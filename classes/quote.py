@@ -1,79 +1,88 @@
-from Util import MessageType
-
+from state import MessageType, Utility
 
 class Quote:
-    __quote: str
-    __author: str
-    __location: str
-    __time: str
-    __creator: str
+    quote: str
+    author: str
+    time_place: str
 
-    def __init__(self, creator, perform_parse=False, raw='', quote='<No content>', author='Anonymous', location=None, time=None):
-        self.__creator = creator
-        if perform_parse:
-            quote_type = '"'
-            first_index = -1
-            for q in ["'", '"', '`']:
-                first_index = raw.find(q)
-                quote_type = q
-                if first_index != -1:
-                    break
-            if first_index == -1:
-                # the input quote is bad
-                return
-            quote_parts = raw.split(quote_type)[1:]
-            self.__quote = quote_parts[0].strip()
-            if quote_parts[1].find(',') == -1:
-                self.__author = quote_parts[1].replace('-','').strip()
-            else:
-                # should be in format <author>, <time>, <location>
-                metadata = quote_parts[1].split(',')
-                try:
-                    self.__author = metadata[0].replace('-','').strip()
-                except:
-                    pass
-                try:
-                    self.__time = metadata[1].strip()
-                except:
-                    pass
-                try:
-                    self.__location = metadata[2].strip()
-                except:
-                    pass
-        else:
-            self.__quote = quote
-            self.__author = author
-            self.__location = location
-            self.__time = time
-    
-    def get_creator(self):
-        return self.__creator
-
-    def is_bad(self):
-        return self.__quote == None
-    
-    def get_quote_short(self):
-        return f'"{self.__quote}" -*{self.__author}*'
-    
-    def get_quote_formal(self):
-        after_quote = ""
-        if not self.__location and self.__time:
-            after_quote = f", {self.__time}"
-        elif self.__location and not self.__time:
-            after_quote = f" in {self.__location}"
-        elif self.__location and self.__time:
-            after_quote = f", {self.__time} in {self.__location}"
-        return f'"{self.__quote}" -*{self.__author}{after_quote}*'
+    def __init__(self, quote_text: str, author_name: str, time_place: str):
+        self.quote = quote_text
+        self.author = author_name
+        self.time_place = time_place
     
     def get_embed(self):
         import discord
-        embed = discord.Embed(title="Quote (without quotation marks)", color=MessageType.QUOTE.value)
-        embed.add_field(name="Text", value=self.__quote, inline=False)
-        embed.add_field(name="Author", value=self.__author, inline=True)
-        embed.add_field(name="Location", value=self.__location, inline=True)
-        embed.add_field(name="Time", value=self.__time, inline=True)
-        embed.set_footer(text=f"Added by {self.__creator}")
+        embed = discord.Embed(title="Quote", color=MessageType.QUOTE.value)
+        embed.description = self.quote
+        embed.add_field(name="Author", value=self.author, inline=True)
+        embed.add_field(name="Time/Place", value=self.time_place, inline=True)
         return embed
     
+    def get_markdown_string(self):
+        full_text = self.quote
+        if Utility.is_null_or_whitespace(self.author):
+            full_text = f"{full_text}"
+        else:
+            full_text = f"{full_text} -**{self.author}**"
+        if not Utility.is_null_or_whitespace(self.time_place):
+            full_text = f"{full_text},  {self.time_place}"
+        return full_text
+
+
+    def as_dict(self):
+        return {
+            "quote": self.quote,
+            "author": self.author,
+            "time_place": self.time_place
+        }
+    
+
     def __str__(self):
-        return self.get_quote_formal()
+        full_text = self.quote
+        if Utility.is_null_or_whitespace(self.author):
+            full_text = f"{full_text} -Unknown"
+        else:
+            full_text = f"{full_text} -{self.author}"
+        if not Utility.is_null_or_whitespace(self.time_place):
+            full_text = f"{full_text},  {self.time_place}"
+        return full_text
+    
+
+    def parse_from_raw(input: str):
+        if Utility.is_null_or_whitespace(input):
+            return ""
+        
+        # quote elements
+        quote_text: str
+        author: str
+        time_place: str
+
+        # parse text
+        quote_type = input[0]
+        last_quotation = input.rfind(quote_type)
+        quote_text = input[:last_quotation+1]
+
+        # parse author and time/place
+        metadata = input[last_quotation+1:]
+        metadata_start_position = 0
+        for i, c in enumerate(metadata):
+            if c.isdigit() or c.isalpha():
+                metadata_start_position = i
+                break
+        
+        metadata = metadata[metadata_start_position:]
+
+        end_position = metadata.find(",")
+        # if -1, then metadata=author
+        if end_position > 0:
+            author = metadata[:end_position]
+            time_place = metadata[end_position+1:].strip()
+        else:
+            author = metadata
+            time_place = ""
+
+        quote_text = quote_text.strip()
+        author = author.strip()
+        time_place = time_place.strip()
+        
+        return Quote(quote_text, author, time_place)

@@ -141,3 +141,34 @@ BEGIN
     SELECT ROW_COUNT();
 END $$
 DELIMITER ;
+
+-- ----------------------------
+-- Quotes
+-- ----------------------------
+
+CREATE TABLE quotes (
+    id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    set_id BIGINT NOT NULL,
+    ordering INT NOT NULL,
+    guild_id BIGINT,
+    author NVARCHAR(5000),
+    time_place NVARCHAR(5000),
+    quote NVARCHAR(5000),
+    date_created DATETIME
+) CHARSET=utf16;
+
+DELIMITER $$
+CREATE PROCEDURE insert_quote_with_set_id
+(
+    input_set_id BIGINT,
+    input_ordering INT,
+    input_guild_id BIGINT,
+	input_quote NVARCHAR(5000), 
+    input_author NVARCHAR(5000),
+    input_time_place NVARCHAR(5000)
+)
+BEGIN
+    INSERT INTO quotes (set_id, ordering, guild_id, author, time_place, quote, date_created) VALUES (input_set_id, input_ordering, input_guild_id, input_author, input_time_place, input_quote, NOW());
+    SELECT ROW_COUNT();
+END $$
+DELIMITER ;

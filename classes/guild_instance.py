@@ -24,6 +24,9 @@ class GuildInstance:
         for channel_type, channel in self._channel_dict.items():
             if channel.id == id:
                 return channel_type
+            
+    def get_channel(self, channel_type):
+        return self._channel_dict.get(channel_type, None)
 
 
     def as_dict(self):

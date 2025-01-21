@@ -23,7 +23,7 @@ class ResponseType(Enum):
 
 
 class Program:
-    CONFIRMATION_TIME = 20.0 # seconds
+    CONFIRMATION_TIME = 10.0 # seconds
     CHANNEL_TYPES = ["command", "jukebox", "rss", "localhost" ]
     AFFIRMATIVE_RESPONSE = ["y", "ya", "ye", "yea", "yes", "yeah", "t", "true", "sure"]
     NEGATIVE_RESPONSE = ["n", "no", "nah", "nay", "f", "false", "nope"]
@@ -118,6 +118,7 @@ class Program:
             data = []
             try:
                 with connection.cursor(buffered=True) as cursor:
+                    print(f"\t[{select_statement}] -> {arguments}")
                     cursor.execute(select_statement, arguments)
             finally:
                 connection.close()

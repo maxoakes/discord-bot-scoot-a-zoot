@@ -6,6 +6,7 @@ from cogs.tools import ToolsCog
 from cogs.primary import PrimaryCog
 from cogs.feeds import FeedCog
 from cogs.media import MediaCog
+from cogs.quotes import QuoteCog
 from state import Program
 
 def main():
@@ -54,6 +55,8 @@ def main():
         Program.bot.add_cog(MediaCog())
     if "r" in mode_string:
         Program.bot.add_cog(FeedCog())
+    if "q" in mode_string:
+        Program.bot.add_cog(QuoteCog())
     Program.bot.run(token)
 
     # End

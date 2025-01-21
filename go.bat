@@ -1,2 +1,2 @@
 title ScootNet
-py main.py gtrm ! true
+py main.py gtrmq ! true
