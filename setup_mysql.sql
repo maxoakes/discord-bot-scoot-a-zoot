@@ -157,6 +157,7 @@ CREATE TABLE quotes (
     date_created DATETIME
 ) CHARSET=utf16;
 
+
 DELIMITER $$
 CREATE PROCEDURE insert_quote_with_set_id
 (
@@ -172,3 +173,27 @@ BEGIN
     SELECT ROW_COUNT();
 END $$
 DELIMITER ;
+
+
+CREATE TABLE qotd_subscription (
+    guild_id BIGINT UNIQUE NOT NULL,
+    channel_id BIGINT NOT NULL
+);
+
+
+DELIMITER $$
+CREATE PROCEDURE subscribe_to_qotd
+(
+	input_guild_id BIGINT, 
+    input_channel_id BIGINT
+)
+BEGIN
+    IF EXISTS (SELECT * FROM qotd_subscription WHERE guild_id=input_guild_id) THEN
+        UPDATE qotd_subscription SET channel_id=input_channel_id WHERE guild_id=input_channel_id;
+    ELSE
+        INSERT INTO qotd_subscription (guild_id, channel_id) VALUES (input_guild_id, input_channel_id);
+    END IF;
+    SELECT ROW_COUNT();
+END $$
+DELIMITER ;
+

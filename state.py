@@ -38,6 +38,7 @@ class Program:
     RADIO_STATIONS_FILE_NAME = "radio_stations.json"
     MAX_NEW_RSS_STORIES_PER_CYCLE = 3
     RSS_FEED_UPDATE_TIMER = 60*30
+    QOTD_HOUR_OF_DAY = 6
 
     bot: commands.Bot
     guild_instances: dict[int, object]
@@ -100,12 +101,7 @@ class Program:
                     # Attempts to reconnect failed; returning None
                     print("Failed to connect, exiting without a connection: %s", err)
                     return None
-                print(
-                    "Connection failed: %s. Retrying (%d/%d)...",
-                    err,
-                    attempt,
-                    attempts-1,
-                )
+                print("Connection failed: %s. Retrying (%d/%d)...",err,attempt,attempts-1,)
                 # progressive reconnect delay
                 time.sleep(delay ** attempt)
                 attempt += 1
@@ -134,6 +130,7 @@ class Program:
         if connection and connection.is_connected():
             try:
                 with connection.cursor() as cursor:
+                    print(f"\t[{procedure}] -> {arguments}")
                     cursor.callproc(procedure, arguments)
             finally:
                 connection.close()
@@ -158,7 +155,7 @@ class Utility:
                 if guild_instance.get_channel(channel_type).id == context.channel.id:
                     return True
                 else:
-                    print(f"Incorrect channel {Program.guild_instances[context.guild.id].get_channel(channel_type)}")
+                    print(f"\tIncorrect channel {Program.guild_instances[context.guild.id].get_channel(channel_type)}")
                     return False
     
 
@@ -168,7 +165,7 @@ class Utility:
 
 
     async def http_get(url: str) -> tuple[dict | str, ResponseType, int]:
-        print(f"GET {url}")
+        print(f"\tGET {url}")
         async with aiohttp.ClientSession() as session:
             async with session.get(url) as response:
                 content_type: str = response.headers.get("content-type")
