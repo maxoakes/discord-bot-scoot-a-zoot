@@ -68,65 +68,64 @@ class PrimaryCog(commands.Cog):
     async def command_setchannel(self, context: commands.Context):
         if not Utility.is_valid_command_context(context, channel_type=self._default_channel_type, is_global_command=True, is_whisper_command=False):
             return
-        if not context.author.guild_permissions.administrator:
-            await context.reply(f"Fuck off. You are not an admin.")
-        else:
-            command = TextCommand(context)
-            # show instructions if wrong syntax
-            if len(command.get_all_parts()) != 3:
-                await context.reply(Program.get_help_instructions("setchannel"))
-                return
-            
-            # show instructions if invalid channel type
-            channel_type = command.get_part(1)
-            if not channel_type in Program.CHANNEL_TYPES:
-                await context.reply(Program.get_help_instructions("setchannel"))
-                return
-            
-            # return if channel is not valid
-            channel = Program.bot.get_channel(int(command.get_part(2)))
-            if channel == None:
-                await context.reply(f"`{command.get_part(2)}` is not a valid channel ID.")
-                return
-            
-            # if the command is all valid
-            async with context.typing():
-                guild_id = channel.guild.id
-                channel_id = channel.id
+        if not context.author.guild_permissions.manage_messages:
+            await context.reply(f"You do not have the required permissions: `manage_messages`.")
+            return
 
-                if guild_id in Program.guild_instances:
-                    Program.guild_instances[guild_id].set_channel_type(channel_type, channel_id)
-                    print(f"\tUpdated existing guild {channel.guild.name} with {channel_type} channel as {channel_id}")
-                else:
-                    new_guild_instance = GuildInstance(guild_id)
-                    new_guild_instance.set_channel_type(channel_type, channel_id)
-                    Program.guild_instances[guild_id] = new_guild_instance
-                    print(f"\tWrote new guild {channel.guild.name} using {channel_type}:{channel_id}")
+        command = TextCommand(context)
+        # show instructions if wrong syntax
+        if len(command.get_all_parts()) != 3:
+            await context.reply(Program.get_help_instructions("setchannel"))
+            return
+        
+        # show instructions if invalid channel type
+        channel_type = command.get_part(1)
+        if not channel_type in Program.CHANNEL_TYPES:
+            await context.reply(Program.get_help_instructions("setchannel"))
+            return
+        
+        # return if channel is not valid
+        channel = Program.bot.get_channel(int(command.get_part(2)))
+        if channel == None:
+            await context.reply(f"`{command.get_part(2)}` is not a valid channel ID.")
+            return
+        
+        # if the command is all valid
+        async with context.typing():
+            guild_id = channel.guild.id
+            channel_id = channel.id
 
-                # save change to disk
-                if Program.use_database:
-                    result = self.update_guilds_to_database(guild_id, channel_type, channel_id)
-                    if result != 1:
-                        await context.reply(f"Something went wrong ({result})")
-                        return
-                else:
-                    self.write_guilds_to_json()
+            if guild_id in Program.guild_instances:
+                Program.guild_instances[guild_id].set_channel_type(channel_type, channel_id)
+                print(f"\tUpdated existing guild {channel.guild.name} with {channel_type} channel as {channel_id}")
+            else:
+                new_guild_instance = GuildInstance(guild_id)
+                new_guild_instance.set_channel_type(channel_type, channel_id)
+                Program.guild_instances[guild_id] = new_guild_instance
+                print(f"\tWrote new guild {channel.guild.name} using {channel_type}:{channel_id}")
 
-            # final response to user
-            await context.reply(f"Got it. I will use {channel.mention} for `{channel_type}` messages.")                   
+            # save change to disk
+            if Program.use_database:
+                result = self.update_guilds_to_database(guild_id, channel_type, channel_id)
+                if result != 1:
+                    await context.reply(f"Something went wrong ({result})")
+                    return
+            else:
+                self.write_guilds_to_json()
+
+        # final response to user
+        await context.reply(f"Got it. I will use {channel.mention} for `{channel_type}` messages.")                   
 
 
     @commands.command(name="getchannels", hidden=False, brief="Get your server's list of command-like channels")
     async def command_getchannel(self, context: commands.Context):
         if not Utility.is_valid_command_context(context, channel_type=self._default_channel_type, is_global_command=True, is_whisper_command=False):
             return
-        if not context.author.guild_permissions.administrator:
-            await context.reply(f"Fuck off. You are not an admin.")
-        else:
-            message_string = "The following channels are used for my message output:\n"
-            for channel_type, channel in Program.guild_instances[context.guild.id].get_channels().items():
-                message_string += f"`{channel_type}`: {channel.mention}\n"
-            await context.reply(message_string)
+        
+        message_string = "The following channels are used for my message output:\n"
+        for channel_type, channel in Program.guild_instances[context.guild.id].get_channels().items():
+            message_string += f"`{channel_type}`: {channel.mention}\n"
+        await context.reply(message_string)
         
 
     @commands.command(name="checkchannel", hidden=False, brief="Check if the current channel is of the specified type")
@@ -153,62 +152,63 @@ class PrimaryCog(commands.Cog):
     async def command_cls(self, context: commands.Context):
         if not Utility.is_valid_command_context(context, channel_type=self._default_channel_type, is_global_command=True, is_whisper_command=False):
             return
-        if not context.author.guild_permissions.administrator or not context.channel.permissions_for(context.author).manage_messages:
-            await context.reply(f"Incorrect permissions.")
-        else:
-            command = TextCommand(context)
-            do_output = command.get_arg("output") in Program.AFFIRMATIVE_RESPONSE
+        if not context.author.guild_permissions.manage_messages:
+            await context.reply(f"You do not have the required permissions: `manage_messages`.")
+            return
 
-            if self._cls_running:
-                await context.reply(f"This command is already running somewhere and is currently unavailable. Come back later.")
-                return
-            
-            self._cls_running = True
-            print(f"\tWorking to delete messages from {context.channel.name}...")
-            await context.send(f"Working to delete messages. This may take a while...")
-            deleted: list[discord.Message] = await context.channel.purge(oldest_first=True)
+        command = TextCommand(context)
+        do_output = command.get_arg("output") in Program.AFFIRMATIVE_RESPONSE
 
-            import json
-            import re
-            output_file_path = ""
-            try:
-                pattern = re.compile("[\W]+")
-                output_file_name = f"messages_{context.guild.name}_{context.channel.name}_{round(datetime.datetime.now().timestamp())}"
-                output_file_name = pattern.sub("", output_file_name)
-                output_file_path = fr"logs/{output_file_name}.json"
-                with open(output_file_path, "w") as file:
-                    output_list = []
-                    for m in deleted:
-                        output_list.append(dict(map(lambda kv: (kv[0], str(kv[1])), {
-                            "id": m.id,
-                            "guild": m.guild,
-                            "channel": m.channel.name,
-                            "content": m.content,
-                            "author": m.author,
-                            "created_at": m.created_at,
-                            "edited_at": m.edited_at,
-                            "components": m.components,
-                            "pinned": m.pinned,
-                            "type": m.type,
-                            "tts": m.tts,
-                            "activity": m.activity,
-                            "attachments": m.attachments,
-                            "embeds": m.embeds,
-                            "application": m.application
-                        }.items())))
-                    json.dump(output_list, file, indent=4)
-                print("\tChannel message dump file written")
-            except Exception as e:
-                print(f"\tFailed to write dump: {e}")
-                await context.send("Failed creating dump of messages. Exiting command...")
-                self._cls_running = False
-                return
-            finally:
-                self._cls_running = False
+        if self._cls_running:
+            await context.reply(f"This command is already running somewhere and is currently unavailable. Come back later.")
+            return
+        
+        self._cls_running = True
+        print(f"\tWorking to delete messages from {context.channel.name}...")
+        await context.send(f"Working to delete messages. This may take a while...")
+        deleted: list[discord.Message] = await context.channel.purge(oldest_first=True)
 
-            if (do_output):
-                attachment = discord.File(output_file_path)
-                await context.send(f"All messages deleted. Attached is the archive.", file=attachment)
+        import json
+        import re
+        output_file_path = ""
+        try:
+            pattern = re.compile("[\W]+")
+            output_file_name = f"messages_{context.guild.name}_{context.channel.name}_{round(datetime.datetime.now().timestamp())}"
+            output_file_name = pattern.sub("", output_file_name)
+            output_file_path = fr"logs/{output_file_name}.json"
+            with open(output_file_path, "w") as file:
+                output_list = []
+                for m in deleted:
+                    output_list.append(dict(map(lambda kv: (kv[0], str(kv[1])), {
+                        "id": m.id,
+                        "guild": m.guild,
+                        "channel": m.channel.name,
+                        "content": m.content,
+                        "author": m.author,
+                        "created_at": m.created_at,
+                        "edited_at": m.edited_at,
+                        "components": m.components,
+                        "pinned": m.pinned,
+                        "type": m.type,
+                        "tts": m.tts,
+                        "activity": m.activity,
+                        "attachments": m.attachments,
+                        "embeds": m.embeds,
+                        "application": m.application
+                    }.items())))
+                json.dump(output_list, file, indent=4)
+            print("\tChannel message dump file written")
+        except Exception as e:
+            print(f"\tFailed to write dump: {e}")
+            await context.send("Failed creating dump of messages. Exiting command...")
+            self._cls_running = False
+            return
+        finally:
+            self._cls_running = False
+
+        if (do_output):
+            attachment = discord.File(output_file_path)
+            await context.send(f"All messages deleted. Attached is the archive.", file=attachment)
 
 
     # #########################

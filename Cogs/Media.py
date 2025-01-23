@@ -106,10 +106,14 @@ class MediaCog(commands.Cog):
         if not Utility.is_valid_command_context(context, channel_type=self._default_channel_type, is_global_command=True, is_whisper_command=False):
             return
         
-        if Program.use_database:
-            self.load_radio_stations_from_database()
-        else:
-            self.load_radio_stations_from_json()
+        command = TextCommand(context)
+        if command.get_part(1) == "reload":
+            async with context.typing():
+                if Program.use_database:
+                    self.load_radio_stations_from_database()
+                else:
+                    self.load_radio_stations_from_json()
+
         station_list = list(map(lambda x: f"[{x[1].name}] {x[1].display_name}", self.radio_stations.items()))
         station_string = "\n".join(station_list)
         await context.send(f"**The following radio stations are available:**\n```{station_string} ```")

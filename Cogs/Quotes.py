@@ -18,18 +18,19 @@ class QuoteCog(commands.Cog):
     @commands.Cog.listener()
     async def on_ready(self):
         print(f"Quotes.on_ready(): We have logged in as {Program.bot.user}")
-        now = datetime.datetime.now()
-        seconds_to_first_message = (datetime.datetime.combine(now + datetime.timedelta(days=1), datetime.time(hour=Program.QOTD_HOUR_OF_DAY)) - now).seconds
-        print(f"\tFirst QotD message will occur in {math.floor(seconds_to_first_message/60)} minutes.")
-        await asyncio.sleep(seconds_to_first_message)
         while True:
+            # get seconds to next qotd time
+            now = datetime.datetime.now()
+            seconds_to_first_message = (datetime.datetime.combine(now + datetime.timedelta(days=1), datetime.time(hour=Program.QOTD_HOUR_OF_DAY)) - now).seconds
+            print(f"\tQotD message will occur in {math.floor(seconds_to_first_message/60)} minutes.")
+            await asyncio.sleep(seconds_to_first_message)
+            # do qotd
             print(f"Sending quote of the day at {datetime.datetime.now()}")
             guild_channel_rows = Program.run_query_return_rows("SELECT guild_id, channel_id FROM discord.qotd_subscription", ())
             for guild_id, channel_id in guild_channel_rows:
                     channel = Program.bot.get_channel(channel_id)
                     message_content = await self.get_random_quote_from_guild(guild_id)
                     await channel.send(f"Quote of the day:\n{message_content}")
-            await asyncio.sleep(86400)
     
 
     @commands.command(name="quote", aliases=["q"], hidden=False, 
@@ -39,9 +40,11 @@ class QuoteCog(commands.Cog):
     async def command_quote(self, context: commands.Context):
         if not Utility.is_valid_command_context(context, channel_type=self._default_channel_type, is_global_command=True, is_whisper_command=False):
             return
+        if not context.author.guild_permissions.manage_messages:
+            await context.reply(f"You do not have the required permissions: `manage_messages`.")
+            return
         
         command = TextCommand(context)
-        
         match command.get_part(1):
             case 'add' | 'a':
                 quote_objects: list[Quote] = []
@@ -100,25 +103,25 @@ class QuoteCog(commands.Cog):
     async def command_qotd(self, context: commands.Context):
         if not Utility.is_valid_command_context(context, channel_type=self._default_channel_type, is_global_command=True, is_whisper_command=False):
             return
-        if not context.author.guild_permissions.administrator:
-            await context.reply(f"Fuck off. You are not an admin.")
-        else:
-            command = TextCommand(context)
+        if not context.author.guild_permissions.manage_messages:
+            await context.reply(f"You do not have the required permissions: `manage_messages`.")
+            return
+        
+        command = TextCommand(context)
+        input_channel_id = context.channel.id
+        # show instructions if wrong syntax
+        if command.get_part(1):
+            try:
+                input_channel_id = int(command.get_part(1))
+            except:
+                await context.reply(f"That channel ID ({command.get_part(1)}) is not valid.")
+            return
+        
+        async with context.typing():
+            result = Program.call_procedure_return_scalar("subscribe_to_qotd", (context.guild.id, input_channel_id))
 
-            input_channel_id = context.channel.id
-            # show instructions if wrong syntax
-            if command.get_part(1):
-                try:
-                    input_channel_id = int(command.get_part(1))
-                except:
-                    await context.reply(f"That channel ID ({command.get_part(1)}) is not valid.")
-                return
-            
-            async with context.typing():
-                result = Program.call_procedure_return_scalar("subscribe_to_qotd", (context.guild.id, input_channel_id))
-
-            # final response to user
-            await context.reply(f"{Program.bot.get_channel(input_channel_id).mention} will display the quote of the day.")
+        # final response to user
+        await context.reply(f"{Program.bot.get_channel(input_channel_id).mention} will display the quote of the day.")
 
 
 # #############################

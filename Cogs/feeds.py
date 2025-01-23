@@ -122,8 +122,8 @@ class FeedCog(commands.Cog):
     async def command_subscribe(self, context: commands.Context):
         if not Utility.is_valid_command_context(context, channel_type=self._default_channel_type, is_global_command=True, is_whisper_command=False):
             return
-        if not context.author.guild_permissions.administrator:
-            await context.reply(f"You must be an admin to use this command.")
+        if not context.author.guild_permissions.manage_messages:
+            await context.reply(f"You do not have the required permissions: `manage_messages`.")
             return
         
         command = TextCommand(context)
@@ -163,12 +163,11 @@ class FeedCog(commands.Cog):
     async def command_unsubscribe(self, context: commands.Context):
         if not Utility.is_valid_command_context(context, channel_type=self._default_channel_type, is_global_command=True, is_whisper_command=False):
             return
-        if not context.author.guild_permissions.administrator:
-            await context.reply(f"You must be an admin to use this command.")
+        if not context.author.guild_permissions.manage_messages:
+            await context.reply(f"You do not have the required permissions: `manage_messages`.")
             return
 
         command = TextCommand(context)
-
         rss_feed_name = command.get_part(1)
         if not rss_feed_name in list(self.feed_subscribers.keys()):
             await context.reply(f"`{rss_feed_name}` is not a valid feed.")
@@ -197,19 +196,6 @@ class FeedCog(commands.Cog):
 
         await context.reply(f"Unsubscribed {Program.bot.get_channel(channel_id).mention} from `{rss_feed_name}`.")
         await Program.write_dev_log(f"Channel {channel_id} was unsubscribed from `{rss_feed_name}` by `{context.author}`.")
-
-
-
-    @commands.command(name="force_read", hidden=False, 
-        brief="Force a pass of the rss reader to all channels")
-    async def command_force_read(self, context: commands.Context):
-        if not Utility.is_valid_command_context(context, channel_type=self._default_channel_type, is_global_command=True, is_whisper_command=False):
-            return
-        if not context.author.guild_permissions.administrator:
-            await context.reply(f"You must be an admin to use this command.")
-
-        print(f"\t{context.author.name} forced an RSS feed update.")
-        await self.parse_feed()
 
 
     # #########################

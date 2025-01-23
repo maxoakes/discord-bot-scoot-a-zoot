@@ -132,11 +132,13 @@ class Program:
                 with connection.cursor() as cursor:
                     print(f"\t[{procedure}] -> {arguments}")
                     cursor.callproc(procedure, arguments)
+                    
             finally:
                 connection.close()
+            print(f"\trowcount={cursor.rowcount}")
             return cursor.rowcount
         else:
-            print(f"Failed to call {procedure}")
+            print(f"\tFailed to call {procedure}")
             return 0
         
 
