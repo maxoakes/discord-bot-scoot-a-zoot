@@ -1,0 +1,13 @@
+aiohttp==3.8.4
+py-cord==2.6.1
+feedparser==6.0.11
+feedparser==6.0.11
+ffmpeg==1.4
+ffmpegio==0.8.3
+ffmpegio-core==0.8.3
+mysql-connector-python==9.1.0
+py-cord==2.6.1
+python-dateutil==2.8.2
+python-dotenv==1.0.1
+youtube-dl @ git+https://github.com/ytdl-org/youtube-dl.git@d1c6c5c4d618fa950813c0c71aede34a5ac851e9
+requests==2.32.3

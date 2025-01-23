@@ -1,30 +1,36 @@
 # Discord Bots
 
-## DJ-Scoot-A-Zoot
-A simple Python-based media player. Allows users to search youtube for videos/music to play in discord voice channels, or link urls from any (audio or video) source to play in voice channels.
+## DJ-Scoot-A-Zoot / ScootNet
+A Discord bot that has many modes: 
+* Tools like weather, dictionary and color lookups
+* Media player that plays from a preset list of media
+* Quote tracking
+* Custom-built RSS feed
 
-### TODO:
-* Find ways to reduce time consuming blocking (CPU-bound?) actions:
-    * Youtube_DL info extract -> up to 2 seconds
-    * Create stream object from FFMPEG -> 2 seconds
-
-## ScootNet
-A general-purpose bot that does many things from adding items to databases, get the weather, check for news, or anything else.
-
-## Notes
-A universal bot will not be released. When the bots are run, they are each intended to manage one server at a time.
+All settings are stored in json files or a MySQL database (other than the quoting functionality, which requires a database).
 
 ## Installation and Usage
 
-### Required dependencies to `pip install`:
+### Required dependencies:
+Also see `--upgrade py-cord[voice] py-cord[speed]`
 
-```pip install py-cord ffmpeg asyncio pynacl python-dotenv youtube-search requests "git+https://github.com/ytdl-org/youtube-dl.git" --upgrade py-cord[voice] py-cord[speed]```
+### Usage
 
-If using MySql as Database:
-`pip install mysql-connector-python`
+Full usage is
+
+```py main.py [list of character codes] [prefix command character] [true= mysql|false=json]```
+
+Mode codes:
+* `t` = tools
+* `r` = RSS feeds
+* `m` = media player
+* `q` = quotes (requires database)
+
+My personal start command: `py main.py trmq ! true`
 
 ## Maintenance
 RSS Feeds, Radio Stations cannot be created via commands and must be created by admin by editing json files or inserting database rows. For the database, stored procedures are available for adding and editing rows:
 * `insert_or_update_radio_station`
 * `insert_or_update_rss_feed`
-For json files, example files are provided that show how the objects are structured
+
+For json files, `settings/*.json.example` files are provided that show how the objects are structured
