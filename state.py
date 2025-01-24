@@ -1,7 +1,9 @@
+import datetime
 import re
 import html
 import aiohttp
 import discord
+import logging
 from discord.ext import commands
 from enum import Enum
 
@@ -58,6 +60,7 @@ class Program:
         Program.use_database = use_database
         if Program.use_database:
             Program.db_config = db_config
+        Program.log("Program.initialize ended",0)
 
 
     def get_help_instructions(command_name) -> str:
@@ -82,26 +85,41 @@ class Program:
     async def write_dev_log(text: str, embed: discord.Embed | None = None):
         channel = Program.bot.get_channel(Program.control_channel_id)
         if channel is None:
-            print("\tCannot find dev channel. Nothing will be written.")
+            Program.log("Cannot find dev channel. Nothing will be written.",3)
             return
         await channel.send(content=text, embed=embed)
-        print(f"\tControl channel message: {text}")
+        Program.log(f"CONTROL MSG: {text}",1)
+
+    
+    def log(text: str, criticality=0):
+        now = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')
+        crit_char = ""
+        match criticality:
+            case 1:
+                crit_char = "~"
+            case 2:
+                crit_char = "*"
+            case 3: 
+                crit_char = "!"
+            case _:
+                crit_char = ""
+
+        print(f"[{now}] {crit_char}\t{text}")
 
 
     def connect_to_mysql(config, attempts=3, delay=2):
         import mysql.connector
         import time
         attempt = 1
-        # Implement a reconnection routine
         while attempt < attempts + 1:
             try:
                 return mysql.connector.connect(**config)
             except (mysql.connector.Error, IOError) as err:
                 if (attempts is attempt):
                     # Attempts to reconnect failed; returning None
-                    print("Failed to connect, exiting without a connection: %s", err)
+                    Program.log(f"Failed to connect, exiting without a connection: {err}",3)
                     return None
-                print("Connection failed: %s. Retrying (%d/%d)...",err,attempt,attempts-1,)
+                Program.log(f"Connection failed: {err}. Retrying ({attempt}/{attempts-1})...",2)
                 # progressive reconnect delay
                 time.sleep(delay ** attempt)
                 attempt += 1
@@ -114,13 +132,13 @@ class Program:
             data = []
             try:
                 with connection.cursor(buffered=True) as cursor:
-                    print(f"\t[{select_statement}] -> {arguments}")
+                    Program.log(f"QUERY:({select_statement}) PARAM:{arguments}",0)
                     cursor.execute(select_statement, arguments)
             finally:
                 connection.close()
             return cursor.fetchall()
         else:
-            print(f"Failed to call [{select_statement}]")
+            Program.log(f"Failed to call ({select_statement})",3)
             return data
         
 
@@ -130,15 +148,15 @@ class Program:
         if connection and connection.is_connected():
             try:
                 with connection.cursor() as cursor:
-                    print(f"\t[{procedure}] -> {arguments}")
+                    Program.log(f"SP:({procedure}) PARAM:{arguments}",0)
                     cursor.callproc(procedure, arguments)
                     
             finally:
                 connection.close()
-            print(f"\trowcount={cursor.rowcount}")
+            Program.log(f"  SP returned rowcount={cursor.rowcount}",0)
             return cursor.rowcount
         else:
-            print(f"\tFailed to call {procedure}")
+            Program.log(f"Failed to call ({procedure})",3)
             return 0
         
 
@@ -157,7 +175,7 @@ class Utility:
                 if guild_instance.get_channel(channel_type).id == context.channel.id:
                     return True
                 else:
-                    print(f"\tIncorrect channel {Program.guild_instances[context.guild.id].get_channel(channel_type)}")
+                    Program.log(f"Incorrect channel {Program.guild_instances[context.guild.id].get_channel(channel_type)}",1)
                     return False
     
 
@@ -167,7 +185,7 @@ class Utility:
 
 
     async def http_get(url: str) -> tuple[dict | str, ResponseType, int]:
-        print(f"\tGET {url}")
+        Program.log(f"GET {url}",0)
         async with aiohttp.ClientSession() as session:
             async with session.get(url) as response:
                 content_type: str = response.headers.get("content-type")

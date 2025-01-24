@@ -15,7 +15,7 @@ class ToolsCog(commands.Cog):
 
     @commands.Cog.listener()
     async def on_ready(self):
-        print(f"ToolsCog.on_ready(): We have logged in as {Program.bot.user}")
+        Program.log(f"ToolsCog.on_ready(): We have logged in as {Program.bot.user}")
     
 
     # #####################################

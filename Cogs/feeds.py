@@ -25,12 +25,12 @@ class FeedCog(commands.Cog):
     # on startup
     @commands.Cog.listener()
     async def on_ready(self):
-        print(f"FeedCog.on_ready(): We have logged in as {Program.bot.user}")
+        Program.log(f"FeedCog.on_ready(): We have logged in as {Program.bot.user}",0)
 
         # load settings
         if Program.use_database:
             self.load_subscribers_from_database()
-            print(f"\tLoaded {len(self.feed_subscribers)} saved RSS feeds from database.")
+            Program.log(f"Loaded {len(self.feed_subscribers)} saved RSS feeds from database.",0)
         else:
             if not os.path.exists(Program.SETTINGS_DIRECTORY_PATH):
                 os.makedirs(Program.SETTINGS_DIRECTORY_PATH)
@@ -39,16 +39,16 @@ class FeedCog(commands.Cog):
             if not os.path.exists(self._settings_filename):
                 # if it does not, create the file
                 self.update_subscribers_to_json()
-                print(f"\tCreated empty {Program.RSS_FEED_SETTINGS_FILE_NAME}.")
+                Program.log(f"Created empty {Program.RSS_FEED_SETTINGS_FILE_NAME}.",1)
             else:
                 # if it does read it and load
                 self.load_subscribers_from_json()
-                print(f"\tLoaded {len(self.feed_subscribers)} saved feeds(s) from json file.")
+                Program.log(f"Loaded {len(self.feed_subscribers)} saved feeds(s) from json file.",0)
 
         # show rss feeds in console
-        print(f"\tlast read: {self.last_read_date}")
+        Program.log(f"RSS feeds last read {self.last_read_date}",0)
         for n, f in self.feed_subscribers.items():
-            print(f"\t{n}: {json.dumps(f.as_dict())}")
+            Program.log(f"  {n}: {json.dumps(f.as_dict())}",0)
 
         # start rss reader cycle
         await self.rss_watcher()
@@ -57,7 +57,7 @@ class FeedCog(commands.Cog):
     async def rss_watcher(self):
         import asyncio
         while True:
-            print("\tRunning parse_read() cycle...")
+            Program.log("Running parse_read() cycle...",0)
             await self.parse_feed()
             await asyncio.sleep(Program.RSS_FEED_UPDATE_TIMER)
 
@@ -71,9 +71,9 @@ class FeedCog(commands.Cog):
 
             new_items: list[ParsedFeedItem] = list(filter(lambda x: datetime.datetime.timestamp(x.published) > datetime.datetime.timestamp(self.last_read_date), feed.items))
             new_items = new_items[0:Program.MAX_NEW_RSS_STORIES_PER_CYCLE] # spam prevention
-            print(f"\tParsing {len(new_items)} items from '{feed.title}'. Published after {self.last_read_date} with timestamp({datetime.datetime.timestamp(self.last_read_date)})")
+            Program.log(f"  Parsing {len(new_items)} items from '{feed.title}'. Published after {self.last_read_date} with timestamp({datetime.datetime.timestamp(self.last_read_date)})",0)
             for item in new_items:
-                print(f"\t\tPreparing story published {item.published} with timestamp({datetime.datetime.timestamp(item.published)})")
+                Program.log(f"    Preparing story published {item.published} with timestamp({datetime.datetime.timestamp(item.published)})",0)
                 embed = discord.Embed(
                     title=f"{feed.title.upper()} --- {item.title}",
                     color=MessageType.PLAYLIST_ITEM.value,
@@ -210,7 +210,7 @@ class FeedCog(commands.Cog):
         
         with open(self._settings_filename, "w") as file:
             json.dump(data, file, indent=4)
-            print(f"\tWrote to {self._settings_filename} at {datetime.datetime.now()}")
+            Program.log(f"Wrote to {self._settings_filename}",0)
                 
 
     def load_subscribers_from_json(self) -> bool:
@@ -229,8 +229,8 @@ class FeedCog(commands.Cog):
                         fs.get("subscribing_channels", [])
                     )
                 else:
-                    print(f"\tInvalid FeedSubscriber from file: {feed_name}")
-            print(f"\tLoaded {self._settings_filename} at {datetime.datetime.now()}")
+                    Program.log(f"Invalid FeedSubscriber from file: {feed_name}",2)
+            Program.log(f"Loaded {self._settings_filename}",0)
                 
 
     def update_subscriber_to_database(self, feed_name: str, channel_id: int):
@@ -255,7 +255,7 @@ class FeedCog(commands.Cog):
         for name, value in settings_rows:
             if name == "last_read_date":
                 self.last_read_date = datetime.datetime.fromisoformat(value)
-                print(f"\tParsed '{value}' to [{self.last_read_date}] from database")
+                Program.log(f"Parsed '{value}' to [{self.last_read_date}] from database")
 
 
     def write_settings_last_read_date_to_database(self):

@@ -19,11 +19,11 @@ class PrimaryCog(commands.Cog):
     # on startup
     @commands.Cog.listener()
     async def on_ready(self):
-        print(f"MainCog.on_ready(): We have logged in as {Program.bot.user}")
+        Program.log(f"MainCog.on_ready(): We have logged in as {Program.bot.user}",0)
 
         if Program.use_database:
             self.load_guilds_from_database()
-            print(f"\tLoaded {len(Program.guild_instances)} saved guild(s) from database.")
+            Program.log(f"Loaded {len(Program.guild_instances)} saved guild(s) from database.",0)
         else:
             # make the settings directory if it does not exist
             if not os.path.exists(Program.SETTINGS_DIRECTORY_PATH):
@@ -33,26 +33,26 @@ class PrimaryCog(commands.Cog):
             if not os.path.exists(f"{Program.SETTINGS_DIRECTORY_PATH}/{Program.GUILD_SETTINGS_FILE_NAME}"):
                 # if it does not, create the file
                 self.write_guilds_to_json()
-                print(f"\tCreated empty {Program.GUILD_SETTINGS_FILE_NAME}.")
+                Program.log(f"Created empty {Program.GUILD_SETTINGS_FILE_NAME}.",1)
             else:
                 # if it does read it and load
                 self.load_guilds_from_json()
-                print(f"\tLoaded {len(Program.guild_instances)} saved guild(s) from json file.")
+                Program.log(f"Loaded {len(Program.guild_instances)} saved guild(s) from json file.",0)
 
         # show guilds in console
         for i, g in Program.guild_instances.items():
-            print(f"\t{i}: {json.dumps(g.as_dict())}")
+            Program.log(f"  {i}: {json.dumps(g.as_dict())}",0)
 
         # iterate through all connected guilds and add them to the guild instance list
         for guild in Program.bot.guilds:
             if Program.guild_instances.get(guild.id, None) == None:
                 Program.guild_instances[guild.id] = GuildInstance(guild.id)
-                print(f"\tAdded {guild} to internal guild_instance dict.")
+                Program.log(f"Added {guild} to internal guild_instance dict.",0)
             
 
     @commands.Cog.listener()
     async def on_guild_join(self, guild: discord.Guild):
-        print(f"\tWe have logged in as {Program.bot.user} to {guild.name}.")
+        Program.log(f"We have logged in as {Program.bot.user} to {guild.name}.",0)
         Program.guild_instances[guild.id] = GuildInstance(guild.id)
         pass
 
@@ -97,18 +97,19 @@ class PrimaryCog(commands.Cog):
 
             if guild_id in Program.guild_instances:
                 Program.guild_instances[guild_id].set_channel_type(channel_type, channel_id)
-                print(f"\tUpdated existing guild {channel.guild.name} with {channel_type} channel as {channel_id}")
+                Program.log(f"Updated existing guild {channel.guild.name} with {channel_type} channel as {channel_id}",0)
             else:
                 new_guild_instance = GuildInstance(guild_id)
                 new_guild_instance.set_channel_type(channel_type, channel_id)
                 Program.guild_instances[guild_id] = new_guild_instance
-                print(f"\tWrote new guild {channel.guild.name} using {channel_type}:{channel_id}")
+                Program.log(f"Wrote new guild {channel.guild.name} using {channel_type}:{channel_id}",0)
 
             # save change to disk
             if Program.use_database:
                 result = self.update_guilds_to_database(guild_id, channel_type, channel_id)
                 if result != 1:
                     await context.reply(f"Something went wrong ({result})")
+                    Program.log(f"Something went wrong ({result})",3)
                     return
             else:
                 self.write_guilds_to_json()
@@ -164,7 +165,7 @@ class PrimaryCog(commands.Cog):
             return
         
         self._cls_running = True
-        print(f"\tWorking to delete messages from {context.channel.name}...")
+        Program.log(f"Working to delete messages from {context.channel.name}...",1)
         await context.send(f"Working to delete messages. This may take a while...")
         deleted: list[discord.Message] = await context.channel.purge(oldest_first=True)
 
@@ -197,9 +198,9 @@ class PrimaryCog(commands.Cog):
                         "application": m.application
                     }.items())))
                 json.dump(output_list, file, indent=4)
-            print("\tChannel message dump file written")
+            Program.log(f"Channel message dump written to file {output_file_name}",1)
         except Exception as e:
-            print(f"\tFailed to write dump: {e}")
+            Program.log(f"Failed to write dump: {e}",2)
             await context.send("Failed creating dump of messages. Exiting command...")
             self._cls_running = False
             return
@@ -220,7 +221,7 @@ class PrimaryCog(commands.Cog):
         package = {k: v.as_dict() for k, v in Program.guild_instances.items()}
         with open(filepath, "w") as file:
             json.dump(package, file, indent=4)
-        print(f"\tWrote to {filepath} at {datetime.datetime.now()}")
+        Program.log(f"\tWrote to {filepath}",0)
 
     
     def load_guilds_from_json(self):

@@ -20,11 +20,11 @@ class MediaCog(commands.Cog):
 
     @commands.Cog.listener()
     async def on_ready(self):
-        print(f"MediaCog.on_ready(): We have logged in as {Program.bot.user}")
+        Program.log(f"MediaCog.on_ready(): We have logged in as {Program.bot.user}",0)
 
         if Program.use_database:
             self.load_radio_stations_from_database()
-            print(f"\tLoaded {len(self.radio_stations)} saved radio stations from database.")
+            Program.log(f"Loaded {len(self.radio_stations)} saved radio stations from database.",0)
         else:
             if not os.path.exists(Program.SETTINGS_DIRECTORY_PATH):
                 os.makedirs(Program.SETTINGS_DIRECTORY_PATH)
@@ -33,15 +33,15 @@ class MediaCog(commands.Cog):
             if not os.path.exists(self._settings_filename):
                 # if it does not, create the file
                 self.write_radio_stations_to_json()
-                print(f"\tCreated empty {Program.RADIO_STATIONS_FILE_NAME}.")
+                Program.log(f"Created empty {Program.RADIO_STATIONS_FILE_NAME}.",1)
             else:
                 # if it does read it and load
                 self.load_radio_stations_from_json()
-                print(f"\tLoaded {len(self.radio_stations)} saved radio station(s) from json file.")
+                Program.log(f"Loaded {len(self.radio_stations)} saved radio station(s) from json file.",0)
 
         # show radio stations in console
         for n, r in self.radio_stations.items():
-            print(f"\t{n}: {json.dumps(r.as_dict())}")
+            Program.log(f"  {n}: {json.dumps(r.as_dict())}",0)
 
 
     # #####################################
@@ -77,13 +77,13 @@ class MediaCog(commands.Cog):
         
         async with context.typing():
             if context.voice_client and context.voice_client.is_playing():
-                print(f"\tVoice client in {context.guild.name} is already playing auto. Stopping to play another...")
+                Program.log(f"Voice client in {context.guild.name} is already playing auto. Stopping to play another...",1)
                 context.voice_client.stop()
 
             # Find the media and play
             source = await self.get_stream_from_path(radio_station.url)
             await self.join(context, voice_channel)
-            context.voice_client.play(source, after=lambda e: print(f"\tPlayer error: {e}") if e else None)
+            context.voice_client.play(source, after=lambda e: Program.log(f"Media Player error: {e}",3) if e else None)
         await context.send(f"Now playing: `{radio_station.display_name}`")
 
 
@@ -93,7 +93,7 @@ class MediaCog(commands.Cog):
             return
         
         if context.voice_client != None:
-            print(f"\tVoice client in {context.guild.name} is already playing auto. Stopping to play another...")
+            Program.log(f"Voice client in {context.guild.name} is already playing auto. Stopping to play another...",1)
             context.voice_client.stop()
             await context.voice_client.disconnect()
             await context.send(f"Turning off the radio station...")
@@ -148,7 +148,7 @@ class MediaCog(commands.Cog):
         data = {"presets": list(map(lambda x: x[1].as_dict(), self.radio_stations.items()))}
         with open(self._settings_filename, "w") as file:
             json.dump(data, file, indent=4)
-            print(f"\tWrote to {self._settings_filename} at {datetime.datetime.now()}")
+            Program.log(f"Wrote to {self._settings_filename}",0)
                 
 
     def load_radio_stations_from_json(self) -> bool:
@@ -161,8 +161,8 @@ class MediaCog(commands.Cog):
                 if preset_name != None:
                     self.radio_stations[preset_name] = RadioStation(mp.get("name"), mp.get("display_name"), mp.get("url"), mp.get("is_opus"))
                 else:
-                    print(f"\tInvalid RadioStation from file: {preset_name}")
-            print(f"\tLoaded {self._settings_filename} at {datetime.datetime.now()}")
+                    Program.log(f"Invalid RadioStation from file: {preset_name}",2)
+            Program.log(f"Loaded {self._settings_filename}",0)
 
 
     def update_radio_station_to_database(self, name: str, display_name: str, url: str, opus: bool):

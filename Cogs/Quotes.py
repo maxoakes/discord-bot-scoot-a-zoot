@@ -17,15 +17,15 @@ class QuoteCog(commands.Cog):
 
     @commands.Cog.listener()
     async def on_ready(self):
-        print(f"Quotes.on_ready(): We have logged in as {Program.bot.user}")
+        Program.log(f"Quotes.on_ready(): We have logged in as {Program.bot.user}",0)
         while True:
             # get seconds to next qotd time
             now = datetime.datetime.now()
             seconds_to_first_message = (datetime.datetime.combine(now + datetime.timedelta(days=1), datetime.time(hour=Program.QOTD_HOUR_OF_DAY)) - now).seconds
-            print(f"\tQotD message will occur in {math.floor(seconds_to_first_message/60)} minutes.")
+            Program.log(f"QotD message will occur in {math.floor(seconds_to_first_message/60)} minutes.",0)
             await asyncio.sleep(seconds_to_first_message)
             # do qotd
-            print(f"Sending quote of the day at {datetime.datetime.now()}")
+            Program.log(f"Sending quote of the day now!",0)
             guild_channel_rows = Program.run_query_return_rows("SELECT guild_id, channel_id FROM discord.qotd_subscription", ())
             for guild_id, channel_id in guild_channel_rows:
                     channel = Program.bot.get_channel(channel_id)
@@ -74,12 +74,12 @@ class QuoteCog(commands.Cog):
 
                     async with context.typing():
                         hash = context.message.created_at.__hash__() ^ context.guild.__hash__()
-                        print(f"\tAdding quote to database: with hash {hash} -> [{list(map(lambda x: str(x), quote_objects))}]")
+                        Program.log(f"Adding quote to database: with hash {hash} -> [{list(map(lambda x: str(x), quote_objects))}]",1)
                         i = 0
                         for quote_object in quote_objects:
                             i = i + 1
                             result = Program.call_procedure_return_scalar("insert_quote_with_set_id", (hash, i, context.guild.id, quote_object.quote, quote_object.author, quote_object.time_place))
-                            print(f"\tQuote insert with result ({result}) at {datetime.datetime.now()}")
+                            Program.log(f"Quote insert with result ({result})",0)
 
                     await context.reply(f"Your quote has been added to the database.")
                 except:
@@ -118,6 +118,7 @@ class QuoteCog(commands.Cog):
             return
         
         async with context.typing():
+            Program.log(f"Subscribing {input_channel_id} to quote of the day for {context.guild.name}",1)
             result = Program.call_procedure_return_scalar("subscribe_to_qotd", (context.guild.id, input_channel_id))
 
         # final response to user
