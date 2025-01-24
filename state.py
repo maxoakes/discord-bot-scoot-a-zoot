@@ -139,7 +139,7 @@ class Program:
             return cursor.fetchall()
         else:
             Program.log(f"Failed to call ({select_statement})",3)
-            return data
+            return []
         
 
     def call_procedure_return_scalar(procedure: str, arguments: tuple):
