@@ -132,12 +132,12 @@ class MediaCog(commands.Cog):
     async def get_stream_from_path(self, source_string: str, is_opus=False):
         protocol = source_string.split('://')[0].lower()
         if protocol == Program.FILE_PROTOCOL_PREFIX:
-            return discord.FFmpegPCMAudio(executable=os.getenv('FFMPEG_PATH'), source=source_string[len(Program.FILE_PROTOCOL_PREFIX):])
+            return discord.FFmpegPCMAudio(source=source_string[len(Program.FILE_PROTOCOL_PREFIX):])
         else:
             if is_opus:
-                return await discord.FFmpegOpusAudio.from_probe(source_string, executable=os.getenv('FFMPEG_PATH'), **Program.FFMPEG_OPTIONS, method='fallback')
+                return await discord.FFmpegOpusAudio.from_probe(source_string, **Program.FFMPEG_OPTIONS, method='fallback')
             else:
-                return discord.FFmpegPCMAudio(source=source_string, executable=os.getenv('FFMPEG_PATH'), **Program.FFMPEG_OPTIONS)
+                return discord.FFmpegPCMAudio(source=source_string, **Program.FFMPEG_OPTIONS)
             
 
     # #########################

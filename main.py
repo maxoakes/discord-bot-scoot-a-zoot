@@ -26,7 +26,7 @@ def main():
                             "\r\n\tq = quotes"
                             "\r\n\tr = rss feeds"
                             "\r\nList the letter code(s) of the desired modes: ")
-        pattern = re.compile("[\W_]+")
+        pattern = re.compile(r"[\W_]+")
         mode_string = pattern.sub("", mode_string)
         command_char = input("What character will be used as a prefix to denote commands? ")
         settings_mode = input("Will settings be saved to a database (true) or saved to json files (false)? ")
