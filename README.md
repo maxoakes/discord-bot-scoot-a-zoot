@@ -34,3 +34,9 @@ RSS Feeds, Radio Stations cannot be created via commands and must be created by 
 * `insert_or_update_rss_feed`
 
 For json files, `settings/*.json.example` files are provided that show how the objects are structured
+
+## Docker
+If using Docker and MySQL database on host or elsewhere, the container must see the local network
+```
+sudo docker run -i -d --network host -p 8080:80 scootnet
+```
