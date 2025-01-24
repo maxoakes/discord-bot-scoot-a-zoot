@@ -1,5 +1,6 @@
 .vscode/
 __pycache__/
+ffmpeg/*
 settings/*.json
 Bot/events.json
 logs/
