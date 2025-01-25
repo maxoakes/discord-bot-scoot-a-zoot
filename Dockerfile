@@ -7,4 +7,4 @@ RUN apt-get update -qq && apt-get install ffmpeg -y
 EXPOSE 8000
 
 # Specify the command to run when the container starts
-CMD ["python", "main.py", "trmq", "!", "true"] 
+CMD ["python", "-u", "main.py", "trmq", "!", "true"] 
