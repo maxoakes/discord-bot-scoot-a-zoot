@@ -110,7 +110,7 @@ class QuoteCog(commands.Cog):
         command = TextCommand(context)
         input_channel_id = context.channel.id
         # show instructions if wrong syntax
-        if command.get_part(1):
+        if not Utility.is_null_or_whitespace(command.get_part(1)):
             try:
                 input_channel_id = int(command.get_part(1))
             except:
