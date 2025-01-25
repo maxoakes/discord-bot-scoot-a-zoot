@@ -173,7 +173,7 @@ class PrimaryCog(commands.Cog):
         import re
         output_file_path = ""
         try:
-            pattern = re.compile("[\W]+")
+            pattern = re.compile(r"[\W]+")
             output_file_name = f"messages_{context.guild.name}_{context.channel.name}_{round(datetime.datetime.now().timestamp())}"
             output_file_name = pattern.sub("", output_file_name)
             output_file_path = fr"logs/{output_file_name}.json"
