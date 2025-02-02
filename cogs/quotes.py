@@ -29,7 +29,7 @@ class QuoteCog(commands.Cog):
             Program.log(f"Sending quote of the day now!",0)
             guild_channel_rows = Program.run_query_return_rows("SELECT guild_id, channel_id FROM discord.qotd_subscription", ())
             for guild_id, channel_id in guild_channel_rows:
-                    channel: discord.TextChannel = Program.bot.get_channel(channel_id)
+                    channel = Program.bot.get_channel(channel_id)
                     message_content = await self.get_random_quote_from_guild(guild_id)
                     await channel.send(f"Quote of the day:\n{message_content}")
 
