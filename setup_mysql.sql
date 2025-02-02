@@ -1,6 +1,6 @@
 CREATE DATABASE 'discord';
 CREATE USER 'discord'@'%' IDENTIFIED BY 'discord';
-GRANT INSERT, UPDATE, DELETE, EXECUTE ON discord.* TO 'discord';
+GRANT SELECT, INSERT, UPDATE, DELETE, EXECUTE ON discord.* TO 'discord';
 
 USE discord;
 
