@@ -18,7 +18,9 @@ Also see `--upgrade py-cord[voice] py-cord[speed]`
 
 Full usage is
 
-```py main.py [list of character codes] [prefix command character] [true= mysql|false=json]```
+```
+py main.py [list of character codes] [prefix command character] [true= mysql|false=json]
+```
 
 Mode codes:
 * `t` = tools
@@ -36,7 +38,12 @@ RSS Feeds, Radio Stations cannot be created via commands and must be created by 
 For json files, `settings/*.json.example` files are provided that show how the objects are structured
 
 ## Docker
+Build and name the container
+```
+sudo docker build . --tag=scootnet:latest
+```
+
 If using Docker and MySQL database on host or elsewhere, the container must see the local network
 ```
-sudo docker run -i -d --network host -p 8080:80 scootnet
+sudo docker run -i -d --restart=always --name scootnet --network host -p 8080:80 scootnet
 ```

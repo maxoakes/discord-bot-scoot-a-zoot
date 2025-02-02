@@ -1,44 +1,4 @@
-CREATE DATABASE 'discord';
-CREATE USER 'discord'@'%' IDENTIFIED BY 'discord';
-GRANT INSERT, UPDATE, DELETE, EXECUTE ON discord.* TO 'discord';
-
 USE discord;
-
-CREATE TABLE settings (
-    name VARCHAR(64) NOT NULL PRIMARY KEY,
-    value VARCHAR(128) NOT NULL
-);
-
-
-CREATE TABLE guild_channels (
-    id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
-    guild_id BIGINT NOT NULL,
-    channel_type VARCHAR(64) NOT NULL,
-    channel_id BIGINT NOT NULL
-);
-
-
-CREATE TABLE rss_feeds (
-    id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
-    unique_name VARCHAR(64) UNIQUE NOT NULL,
-    url VARCHAR(256) NOT NULL
-);
-
-
-CREATE TABLE rss_feed_subscribers (
-    id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
-    rss_feed_id INTEGER REFERENCES rss_feeds(id),
-    channel_id BIGINT NOT NULL
-);
-
-
-CREATE TABLE radio_stations (
-    unique_name VARCHAR(64) NOT NULL PRIMARY KEY,
-    display_name VARCHAR(256) NOT NULL,
-    url VARCHAR(256) NOT NULL,
-    is_opus BOOLEAN NOT NULL
-);
-
 
 DELIMITER $$
 CREATE PROCEDURE insert_or_update_guild_channel
@@ -142,22 +102,6 @@ BEGIN
 END $$
 DELIMITER ;
 
--- ----------------------------
--- Quotes
--- ----------------------------
-
-CREATE TABLE quotes (
-    id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
-    set_id BIGINT NOT NULL,
-    ordering INT NOT NULL,
-    guild_id BIGINT,
-    author NVARCHAR(5000),
-    time_place NVARCHAR(5000),
-    quote NVARCHAR(5000),
-    date_created DATETIME
-) CHARSET=utf16;
-
-
 DELIMITER $$
 CREATE PROCEDURE insert_quote_with_set_id
 (
@@ -173,13 +117,6 @@ BEGIN
     SELECT ROW_COUNT();
 END $$
 DELIMITER ;
-
-
-CREATE TABLE qotd_subscription (
-    guild_id BIGINT UNIQUE NOT NULL,
-    channel_id BIGINT NOT NULL
-);
-
 
 DELIMITER $$
 CREATE PROCEDURE subscribe_to_qotd
