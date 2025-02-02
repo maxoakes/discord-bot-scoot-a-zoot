@@ -24,13 +24,17 @@ class QuoteCog(commands.Cog):
             seconds_to_first_message = (datetime.datetime.combine(now + datetime.timedelta(days=1), datetime.time(hour=Program.QOTD_HOUR_OF_DAY)) - now).seconds
             Program.log(f"QotD message will occur in {math.floor(seconds_to_first_message/60)} minutes.",0)
             await asyncio.sleep(seconds_to_first_message)
+
             # do qotd
             Program.log(f"Sending quote of the day now!",0)
             guild_channel_rows = Program.run_query_return_rows("SELECT guild_id, channel_id FROM discord.qotd_subscription", ())
             for guild_id, channel_id in guild_channel_rows:
-                    channel = Program.bot.get_channel(channel_id)
+                    channel: discord.TextChannel = Program.bot.get_channel(channel_id)
                     message_content = await self.get_random_quote_from_guild(guild_id)
                     await channel.send(f"Quote of the day:\n{message_content}")
+
+            # wait for time to pass
+            await asyncio.sleep(120)
     
 
     @commands.command(name="quote", aliases=["q"], hidden=False, 

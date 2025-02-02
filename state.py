@@ -39,8 +39,8 @@ class Program:
     RSS_FEED_SETTINGS_FILE_NAME = "rss_feeds.json"
     RADIO_STATIONS_FILE_NAME = "radio_stations.json"
     MAX_NEW_RSS_STORIES_PER_CYCLE = 3
-    RSS_FEED_UPDATE_TIMER = 60*30
-    QOTD_HOUR_OF_DAY = 6
+    RSS_FEED_UPDATE_TIMER = 60*60*2
+    QOTD_HOUR_OF_DAY = 4
 
     bot: commands.Bot
     guild_instances: dict[int, object]
