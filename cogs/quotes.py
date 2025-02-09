@@ -21,7 +21,7 @@ class QuoteCog(commands.Cog):
         while True:
             # get seconds to next qotd time
             now = datetime.datetime.now()
-            seconds_to_first_message = (datetime.datetime.combine(now + datetime.timedelta(days=1), datetime.time(hour=Program.QOTD_HOUR_OF_DAY)) - now).seconds
+            seconds_to_first_message = (datetime.datetime.combine(now + datetime.timedelta(days=1), datetime.time(hour=4)) - now).seconds
             Program.log(f"QotD message will occur in {math.floor(seconds_to_first_message/60)} minutes.",0)
             await asyncio.sleep(seconds_to_first_message)
 
@@ -29,13 +29,32 @@ class QuoteCog(commands.Cog):
             Program.log(f"Sending quote of the day now!",0)
             guild_channel_rows = Program.run_query_return_rows("SELECT guild_id, channel_id FROM discord.qotd_subscription", ())
             for guild_id, channel_id in guild_channel_rows:
-                    channel = Program.bot.get_channel(channel_id)
-                    message_content = await self.get_random_quote_from_guild(guild_id)
-                    await channel.send(f"Quote of the day:\n{message_content}")
+                await self.run_qotd(guild_id, channel_id)
 
             # wait for time to pass
             await asyncio.sleep(120)
+
     
+    async def run_qotd(self, guild_id, channel_id):
+        # delete the last quote of the day
+        if Program.DO_DELETE_PREVIOUS_QOTD:
+            last_message_id_rows = Program.run_query_return_rows("SELECT last_message_id FROM qotd_subscription WHERE guild_id=(%s) AND channel_id=(%s)", (guild_id, channel_id))
+            for message_id_row in last_message_id_rows:
+                message_id = message_id_row[0]
+                print(message_id)
+                if message_id != None:
+                    channel: discord.TextChannel = Program.bot.get_channel(channel_id)
+                    last_message = await channel.fetch_message(message_id)
+                    await last_message.delete()
+                    Program.log(f"Last message {message_id} was deleted.",0)
+                else:
+                    Program.log(f"No previous qotd message was found for {guild_id}/{channel_id}.",1)
+
+        channel = Program.bot.get_channel(channel_id)
+        message_content = await self.get_random_quote_from_guild(guild_id)
+        message = await channel.send(f"Quote of the day:\n{message_content}")
+        result = Program.call_procedure_return_scalar("update_qotd_message_id", (guild_id, channel_id, message.id))
+
 
     @commands.command(name="quote", aliases=["q"], hidden=False, 
         brief='Create a quote from a user',
@@ -101,10 +120,10 @@ class QuoteCog(commands.Cog):
                                     "```!quote add `\"This is a quote\" -Scouter` ```")
                 
 
-    @commands.command(name="qotd", hidden=False, 
+    @commands.command(name="set_qotd", hidden=False, 
         brief="Set the channel that will receive the quote of the day for the guild", 
         usage=f"(channel_id) ... NOTE: if no channel_id, the current channel will be used")
-    async def command_qotd(self, context: commands.Context):
+    async def command_set_qotd(self, context: commands.Context):
         if not Utility.is_valid_command_context(context, channel_type=self._default_channel_type, is_global_command=True, is_whisper_command=False):
             return
         if not context.author.guild_permissions.manage_messages:
@@ -127,6 +146,19 @@ class QuoteCog(commands.Cog):
 
         # final response to user
         await context.reply(f"{Program.bot.get_channel(input_channel_id).mention} will display the quote of the day.")
+
+
+    @commands.command(name="qotd", hidden=True, brief="Get the QOTD for this channel")
+    async def command_qotd(self, context: commands.Context):
+        if not Utility.is_valid_command_context(context, channel_type=self._default_channel_type, is_global_command=True, is_whisper_command=False):
+            return
+        if not context.author.guild_permissions.manage_messages:
+            await context.reply(f"You do not have the required permissions: `manage_messages`.")
+            return
+
+        guild_channel_rows = Program.run_query_return_rows("SELECT guild_id, channel_id FROM discord.qotd_subscription WHERE guild_id=(%s) AND channel_id=(%s)", (context.guild.id, context.channel.id))
+        for guild_id, channel_id in guild_channel_rows:
+            await self.run_qotd(guild_id, channel_id)
 
 
 # #############################

@@ -41,6 +41,7 @@ class Program:
     MAX_NEW_RSS_STORIES_PER_CYCLE = 3
     RSS_FEED_UPDATE_TIMER = 60*60*2
     QOTD_HOUR_OF_DAY = 4
+    DO_DELETE_PREVIOUS_QOTD = True
 
     bot: commands.Bot
     guild_instances: dict[int, object]

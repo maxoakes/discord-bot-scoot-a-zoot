@@ -33,7 +33,7 @@ def main():
         print(f"Using modes [{mode_string}] with command character [{command_char}] with save method [{settings_mode}]")
 
     # Initialize settings
-    load_dotenv()
+    load_dotenv(override=True)
     use_database = settings_mode.lower() in Program.AFFIRMATIVE_RESPONSE
     control_channel_id = int(os.getenv("CONTROL_CHANNEL"))
     owner_admin_id = int(os.getenv("YOUR_ID"))
