@@ -21,7 +21,7 @@ class QuoteCog(commands.Cog):
         while True:
             # get seconds to next qotd time
             now = datetime.datetime.now()
-            seconds_to_first_message = (datetime.datetime.combine(now + datetime.timedelta(days=1), datetime.time(hour=4)) - now).seconds
+            seconds_to_first_message = (datetime.datetime.combine(now + datetime.timedelta(days=1), datetime.time(hour=8)) - now).seconds
             Program.log(f"QotD message will occur in {math.floor(seconds_to_first_message/60)} minutes.",0)
             await asyncio.sleep(seconds_to_first_message)
 
