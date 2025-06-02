@@ -41,12 +41,14 @@ class QuoteCog(commands.Cog):
             last_message_id_rows = Program.run_query_return_rows("SELECT last_message_id FROM qotd_subscription WHERE guild_id=(%s) AND channel_id=(%s)", (guild_id, channel_id))
             for message_id_row in last_message_id_rows:
                 message_id = message_id_row[0]
-                print(message_id)
                 if message_id != None:
-                    channel: discord.TextChannel = Program.bot.get_channel(channel_id)
-                    last_message = await channel.fetch_message(message_id)
-                    await last_message.delete()
-                    Program.log(f"Last message {message_id} was deleted.",0)
+                    try:
+                        channel: discord.TextChannel = Program.bot.get_channel(channel_id)
+                        last_message = await channel.fetch_message(message_id)
+                        await last_message.delete()
+                        Program.log(f"Last message {message_id} was deleted.",0)
+                    except discord.errors.NotFound:
+                        Program.log(f"Last message {message_id} was not found; ignoring.",0)
                 else:
                     Program.log(f"No previous qotd message was found for {guild_id}/{channel_id}.",1)
 
